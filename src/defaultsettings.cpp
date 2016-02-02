@@ -156,6 +156,7 @@ void set_default_settings(Settings *settings)
 	settings->setDefault("texture_clean_transparent", "false");
 	settings->setDefault("texture_min_size", "64");
 	settings->setDefault("tone_mapping", "false");
+	settings->setDefault("far_contrast", "false");
 	settings->setDefault("enable_bumpmapping", "false");
 	settings->setDefault("enable_parallax_occlusion", "false");
 	settings->setDefault("generate_normalmaps", "false");
