@@ -273,6 +273,85 @@ inline bool isPointableNode(const MapNode &n,
 	       (liquids_pointable && features.isLiquid());
 }
 
+//
+inline const char biggest_of_vec(const v3f &vec) {
+	if (vec.X < vec.Y) {
+		if (vec.Y < vec.Z)
+			return 'Z';
+		return 'Y';
+	}
+	if (vec.X < vec.Z)
+		return 'Z';
+	return 'X';
+}
+
+//
+inline const s16 sign(const float &num) {
+	/*if (num == 0)
+		return 0;*/
+	if (num < 0)
+		return -1;
+	return 1;
+}
+
+//
+inline const v3s16 rayIter(const bool init, const v3f &startpos, const v3f &lookdir)
+{
+	static v3f pos;
+	static v3f dir;
+
+	static s16 stepX, stepY, stepZ;
+	static v3s16 p;
+
+	if (init) {
+		dir = lookdir;
+		pos = startpos;
+
+		// make a table of possible movements
+		stepX = sign(dir.X);
+		stepY = sign(dir.Y);
+		stepZ = sign(dir.Z);
+
+		p = floatToInt(pos, BS);
+
+		return p; // avoid skipping the first position
+	}
+
+	// find the position which has the smallest distance to the line
+	v3f choosefit;
+
+	v3s16 chooseX;
+	if (stepX) {
+		chooseX = p;
+		chooseX.X += stepX;
+		choosefit.X = (intToFloat(chooseX, BS) - pos).normalize().dotProduct(dir);
+	}
+
+	v3s16 chooseY;
+	if (stepY) {
+		chooseY = p;
+		chooseY.Y += stepY;
+		choosefit.Y = (intToFloat(chooseY, BS) - pos).normalize().dotProduct(dir);
+	}
+
+	v3s16 chooseZ;
+	if (stepZ) {
+		chooseZ = p;
+		chooseZ.Z += stepZ;
+		choosefit.Z = (intToFloat(chooseZ, BS) - pos).normalize().dotProduct(dir);
+	}
+
+	const char dircoord = biggest_of_vec(choosefit);
+	if (dircoord == 'X')
+		p = chooseX;
+	else if (dircoord == 'Y')
+		p = chooseY;
+	else if (dircoord == 'Z')
+		p = chooseZ;
+
+	return p;
+}
+
 /*
 	Find what the player is pointing at
 */
@@ -319,73 +398,41 @@ PointedThing getPointedThing(Client *client, Hud *hud, const v3f &player_positio
 	}
 
 	// That didn't work, try to find a pointed at node
+	v3s16 pointed_pos = rayIter(true, camera_position, camera_direction);
+	while ((intToFloat(pointed_pos, BS) - camera_position).getLength() <= d * BS) {
+		MapNode n;
+		bool is_valid_position;
 
-	v3s16 pos_i = floatToInt(player_position, BS);
+		n = map.getNodeNoEx(pointed_pos, &is_valid_position);
+		if (is_valid_position && isPointableNode(n, client, liquids_pointable)) {
+			std::vector<aabb3f> boxes;
+			n.getSelectionBoxes(nodedef, &boxes);
 
-	/*infostream<<"pos_i=("<<pos_i.X<<","<<pos_i.Y<<","<<pos_i.Z<<")"
-			<<std::endl;*/
+			v3s16 np = pointed_pos;
+			v3f npf = intToFloat(np, BS);
+			for (std::vector<aabb3f>::const_iterator
+					i = boxes.begin();
+					i != boxes.end(); ++i) {
+				aabb3f box = *i;
+				box.MinEdge += npf;
+				box.MaxEdge += npf;
 
-	s16 a = d;
-	s16 ystart = pos_i.Y - (camera_direction.Y < 0 ? a : 1);
-	s16 zstart = pos_i.Z - (camera_direction.Z < 0 ? a : 1);
-	s16 xstart = pos_i.X - (camera_direction.X < 0 ? a : 1);
-	s16 yend = pos_i.Y + 1 + (camera_direction.Y > 0 ? a : 1);
-	s16 zend = pos_i.Z + (camera_direction.Z > 0 ? a : 1);
-	s16 xend = pos_i.X + (camera_direction.X > 0 ? a : 1);
-
-	// Prevent signed number overflow
-	if (yend == 32767)
-		yend = 32766;
-
-	if (zend == 32767)
-		zend = 32766;
-
-	if (xend == 32767)
-		xend = 32766;
-
-	v3s16 pointed_pos(0, 0, 0);
-
-	for (s16 y = ystart; y <= yend; y++) {
-		for (s16 z = zstart; z <= zend; z++) {
-			for (s16 x = xstart; x <= xend; x++) {
-				MapNode n;
-				bool is_valid_position;
-
-				n = map.getNodeNoEx(v3s16(x, y, z), &is_valid_position);
-				if (!is_valid_position) {
+				v3f centerpoint = box.getCenter();
+				f32 distance = (centerpoint - camera_position).getLength();
+				if (distance >= min_distance || !box.intersectsWithLine(shootline)) {
 					continue;
 				}
-				if (!isPointableNode(n, client, liquids_pointable)) {
-					continue;
-				}
-
-				std::vector<aabb3f> boxes;
-				n.getSelectionBoxes(nodedef, &boxes);
-
-				v3s16 np(x, y, z);
-				v3f npf = intToFloat(np, BS);
-				for (std::vector<aabb3f>::const_iterator
-						i = boxes.begin();
-						i != boxes.end(); ++i) {
-					aabb3f box = *i;
-					box.MinEdge += npf;
-					box.MaxEdge += npf;
-
-					v3f centerpoint = box.getCenter();
-					f32 distance = (centerpoint - camera_position).getLength();
-					if (distance >= min_distance) {
-						continue;
-					}
-					if (!box.intersectsWithLine(shootline)) {
-						continue;
-					}
-					result.type = POINTEDTHING_NODE;
-					min_distance = distance;
-					pointed_pos = np;
-				}
+				result.type = POINTEDTHING_NODE;
+				min_distance = distance;
+				pointed_pos = np;
+				goto found;
 			}
 		}
+
+		pointed_pos = rayIter(false, camera_position, camera_direction);
 	}
+
+	found:
 
 	if (result.type == POINTEDTHING_NODE) {
 		f32 d = 0.001 * BS;
