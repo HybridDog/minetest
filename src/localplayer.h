@@ -46,6 +46,9 @@ public:
 
 	v3f overridePosition;
 
+	bool got_teleported;
+	v3f teleportPosition;
+
 	void move(f32 dtime, Environment *env, f32 pos_max_d);
 	void move(f32 dtime, Environment *env, f32 pos_max_d,
 			std::vector<CollisionInfo> *collision_info);

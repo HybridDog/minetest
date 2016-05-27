@@ -37,6 +37,8 @@ LocalPlayer::LocalPlayer(IGameDef *gamedef, const char *name):
 	parent(0),
 	isAttached(false),
 	overridePosition(v3f(0,0,0)),
+	got_teleported(false),
+	teleportPosition(v3f(0,0,0)),
 	last_position(v3f(0,0,0)),
 	last_speed(v3f(0,0,0)),
 	last_pitch(0),
@@ -81,6 +83,13 @@ void LocalPlayer::move(f32 dtime, Environment *env, f32 pos_max_d,
 		setPosition(overridePosition);
 		m_sneak_node_exists = false;
 		return;
+	}
+
+	bool just_teleported = got_teleported;
+	if (just_teleported) {
+		position = teleportPosition;
+		setPosition(position);
+		got_teleported = false;
 	}
 
 	// Skip collision detection if noclip mode is used
@@ -183,7 +192,7 @@ void LocalPlayer::move(f32 dtime, Environment *env, f32 pos_max_d,
 	*/
 	if (control.sneak && m_sneak_node_exists &&
 			!(fly_allowed && g_settings->getBool("free_move")) && !in_liquid &&
-			physics_override_sneak && !got_teleported) {
+			physics_override_sneak && !just_teleported) {
 		f32 maxd = 0.5 * BS + sneak_max;
 		v3f lwn_f = intToFloat(m_sneak_node, BS);
 		position.X = rangelim(position.X, lwn_f.X-maxd, lwn_f.X+maxd);
@@ -203,9 +212,6 @@ void LocalPlayer::move(f32 dtime, Environment *env, f32 pos_max_d,
 				m_speed.Y = 0;
 		}
 	}
-
-	if (got_teleported)
-		got_teleported = false;
 
 	// this shouldn't be hardcoded but transmitted from server
 	float player_stepheight = touching_ground ? (BS*0.6) : (BS*0.2);

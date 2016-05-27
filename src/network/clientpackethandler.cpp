@@ -544,7 +544,7 @@ void Client::handleCommand_Breath(NetworkPacket* pkt)
 
 void Client::handleCommand_MovePlayer(NetworkPacket* pkt)
 {
-	Player *player = m_env.getLocalPlayer();
+	LocalPlayer *player = m_env.getLocalPlayer();
 	assert(player != NULL);
 
 	v3f pos;
@@ -553,7 +553,7 @@ void Client::handleCommand_MovePlayer(NetworkPacket* pkt)
 	*pkt >> pos >> pitch >> yaw;
 
 	player->got_teleported = true;
-	player->setPosition(pos);
+	player->teleportPosition = pos;
 
 	infostream << "Client got TOCLIENT_MOVE_PLAYER"
 			<< " pos=(" << pos.X << "," << pos.Y << "," << pos.Z << ")"
