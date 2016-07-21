@@ -378,6 +378,33 @@ int ModApiUtil::l_decode_base64(lua_State *L)
 	return 1;
 }
 
+// make a 64 bit number to be used as index for positions inside the map
+int ModApiUtil::l_pos_index(lua_State *L)
+{
+	NO_MAP_LOCK_REQUIRED;
+
+	s16 x,y,z;
+
+	if (lua_isnone(L, 1) || lua_isnil(L, 1) ||
+			lua_isnone(L, 2) || lua_isnil(L, 2) ||
+			lua_isnone(L, 3) || lua_isnil(L, 3))
+		return 0;
+
+	x = luaL_checknumber(L, 1);
+	y = luaL_checknumber(L, 2);
+	z = luaL_checknumber(L, 3);
+
+	//u48 i = (((z << 16) | y) << 16) | x;
+	u64 i = z;
+	i <<= 16;
+	i |= y;
+	i <<= 16;
+	i |= x;
+
+	lua_pushnumber(L, i);
+	return 1;
+}
+
 // mkdir(path)
 int ModApiUtil::l_mkdir(lua_State *L)
 {
@@ -524,5 +551,7 @@ void ModApiUtil::InitializeAsync(AsyncEngine& engine)
 
 	ASYNC_API_FCT(encode_base64);
 	ASYNC_API_FCT(decode_base64);
+
+	ASYNC_API_FCT(pos_index);
 }
 

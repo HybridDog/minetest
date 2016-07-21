@@ -104,6 +104,9 @@ private:
 	// decode_base64(string)
 	static int l_decode_base64(lua_State *L);
 
+	// 64 bit index
+	static int l_pos_index(lua_State *L);
+
 public:
 	static void Initialize(lua_State *L, int top);
 
