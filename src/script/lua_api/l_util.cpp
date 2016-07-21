@@ -522,6 +522,8 @@ void ModApiUtil::Initialize(lua_State *L, int top)
 
 	API_FCT(encode_base64);
 	API_FCT(decode_base64);
+
+	API_FCT(pos_index);
 }
 
 void ModApiUtil::InitializeAsync(AsyncEngine& engine)
