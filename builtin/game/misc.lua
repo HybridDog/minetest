@@ -250,14 +250,21 @@ function core.close_formspec(player_name, formname)
 end
 
 -- Returns the exact coordinate of a pointed surface
-function minetest.pointed_thing_to_face_pos(placer, pointed_thing)
-	local eye_offset_first = placer:get_eye_offset()
-
+function minetest.pointed_thing_to_face_pos(player, pointed_thing)
+	-- Get the four parameters
 	local node_pos = pointed_thing.under
-	local player_pos = placer:get_pos()
-	local pos_off = vector.multiply(vector.subtract(pointed_thing.above, pointed_thing.under), 0.5)
-	local look_dir = placer:get_look_dir()
 
+	local camera_pos = player:get_pos()
+	local eye_offset_first = player:get_eye_offset()
+	camera_pos.y = camera_pos.y + 1.625 + eye_offset_first.y / 10
+
+	local pos_off = vector.multiply(
+		vector.subtract(pointed_thing.above, pointed_thing.under),
+		0.5)
+
+	local look_dir = player:get_look_dir()
+
+	-- Get informations about the face
 	local offset, nc
 	local oc = {}
 	for c, v in pairs(pos_off) do
@@ -269,13 +276,13 @@ function minetest.pointed_thing_to_face_pos(placer, pointed_thing)
 		end
 	end
 
+	-- One coordinate of the fine position is known
 	local fine_pos = {[nc] = node_pos[nc] + offset}
 
-	player_pos.y = player_pos.y + 1.625 + eye_offset_first.y / 10
-
-	local f = (node_pos[nc] + offset - player_pos[nc]) / look_dir[nc]
+	-- The other ones are calculated here
+	local f = (node_pos[nc] + offset - camera_pos[nc]) / look_dir[nc]
 	for i = 1, #oc do
-		fine_pos[oc[i]] = player_pos[oc[i]] + look_dir[oc[i]] * f
+		fine_pos[oc[i]] = camera_pos[oc[i]] + look_dir[oc[i]] * f
 	end
 
 	return fine_pos
