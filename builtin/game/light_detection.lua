@@ -30,24 +30,6 @@ local function time_to_daynight_ratio(tod)
 	return 1000
 end
 
--- returns the daylight if it's not overwhelmed by artificial light
-local function get_valid_daylight(param1)
-	local daylight = param1 % 16
-	if daylight == 0 then
-		return 0
-	end
-	local nightlight = math.floor(param1 / 16)
-	if daylight > nightlight then
-		return daylight
-	end
-end
-
--- tells whether the node propagates light to the neighbour nodes
-local function propagates_light(node)
-	local def = core.registered_nodes[node.name]
-	return def and def.sunlight_propagates
-end
-
 -- the offsets for neighbouring nodes with given order
 local dirs = {
 	{x=-1, y=0, z=0}, {x=1, y=0, z=0}, {x=0, y=0, z=-1}, {x=0, y=0, z=1},
@@ -65,35 +47,34 @@ local function find_sunlight(pos)
 		local pos, dist = unpack(todo[sp])
 		sp = sp - 1
 		dist = dist + 1
-		-- 15 distance would mean light 0
-		if dist < 15 then
-			for i = 1, 6 do
-				local p = vector.add(pos, dirs[i])
-				local h = core.hash_node_position(p)
-				if not dists[h]
-				or dist < dists[h] then
-					-- position to walk
-					local node = core.get_node(p)
-					if propagates_light(node) then
-						-- can walk here
-						dists[h] = dist
-						local light = get_valid_daylight(node.param1)
-						if light then
+		for i = 1, 6 do
+			local p = vector.add(pos, dirs[i])
+			local h = core.hash_node_position(p)
+			if not dists[h]
+			or dist < dists[h] then
+				-- position to walk
+				local node = core.get_node(p)
+				local def = core.registered_nodes[node.name]
+				if def and def.sunlight_propagates then
+					-- can walk here
+					local daylight = node.param1 % 16
+					local possible_finlight = daylight - dist
+					if possible_finlight > found_light then
+						-- from here brighter sunlight could come from
+						local nightlight = math.floor(node.param1 / 16)
+						if daylight > nightlight then
 							-- found a valid daylight
-							local light = light - dist
-							if light > found_light then
-								-- update the known daylight at the start pos
-								found_light = light
-							end
+							found_light = possible_finlight
 						else
-							-- no valid one found, walk it's neighbours
+							-- sunlight may be darker, so walk it's neighbours
 							sp = sp + 1
 							todo[sp] = {p, dist}
 						end
-					else
-						-- avoid testing propagation at the same position again
-						dists[h] = -1
 					end
+					dists[h] = dist
+				else
+					-- avoid testing propagation at the same position again
+					dists[h] = -1
 				end
 			end
 		end
@@ -103,14 +84,16 @@ end
 
 -- See light.h:119
 function core.get_natural_light(pos, tod)
-	tod = tod or core.get_timeofday()
 	local param1 = core.get_node(pos).param1
-	local sun_factor = time_to_daynight_ratio(tod)
 	local daylight = param1 % 16
-	local nightlight = math.floor(param1 / 16)
-	if daylight == nightlight then
+	if daylight == 0 then
+		return 0
+	end
+	if daylight == math.floor(param1 / 16) then
 		daylight = find_sunlight(pos)
 	end
+	tod = tod or core.get_timeofday()
+	local sun_factor = time_to_daynight_ratio(tod)
 	return math.min(math.floor(sun_factor * daylight / 1000), 15)
 end
 
