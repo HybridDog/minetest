@@ -1099,6 +1099,7 @@ s32 intlGUIEditBox::getCursorPos(s32 x, s32 y)
 	core::stringw *txtLine=0;
 	s32 startPos=0;
 	x+=3;
+	bool limit_to_lineend = false;
 
 	for (u32 i=0; i < lineCount; ++i)
 	{
@@ -1114,14 +1115,15 @@ s32 intlGUIEditBox::getCursorPos(s32 x, s32 y)
 			// we've found the clicked line
 			txtLine = (WordWrap || MultiLine) ? &BrokenText[i] : &Text;
 			startPos = (WordWrap || MultiLine) ? BrokenTextPositions[i] : 0;
+			limit_to_lineend = i != lineCount-1;
 			break;
 		}
 	}
 
 	if (x < CurrentTextRect.UpperLeftCorner.X)
 		x = CurrentTextRect.UpperLeftCorner.X;
-	else if (x > CurrentTextRect.LowerRightCorner.X + 1)
-		x = CurrentTextRect.LowerRightCorner.X + 1;
+	else if (x > CurrentTextRect.LowerRightCorner.X && limit_to_lineend)
+		x = CurrentTextRect.LowerRightCorner.X;
 
 	s32 idx = font->getCharacterFromPos(Text.c_str(), x - CurrentTextRect.UpperLeftCorner.X);
 
