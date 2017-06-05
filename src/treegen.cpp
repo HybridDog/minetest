@@ -532,7 +532,7 @@ void tree_node_placement(MMVManip &vmanip, v3f p0, MapNode node)
 	if (vmanip.m_data[vi].getContent() != CONTENT_AIR
 			&& vmanip.m_data[vi].getContent() != CONTENT_IGNORE)
 		return;
-	vmanip.m_data[vmanip.m_area.index(p1)] = node;
+	vmanip.m_data[vi] = node;
 }
 
 
@@ -545,7 +545,7 @@ void tree_trunk_placement(MMVManip &vmanip, v3f p0, TreeDef &tree_definition)
 	if (vmanip.m_data[vi].getContent() != CONTENT_AIR
 			&& vmanip.m_data[vi].getContent() != CONTENT_IGNORE)
 		return;
-	vmanip.m_data[vmanip.m_area.index(p1)] = tree_definition.trunknode;
+	vmanip.m_data[vi] = tree_definition.trunknode;
 }
 
 
@@ -564,11 +564,11 @@ void tree_leaves_placement(MMVManip &vmanip, v3f p0,
 		return;
 	if (tree_definition.fruit_chance > 0) {
 		if (ps.range(1, 100) > 100 - tree_definition.fruit_chance)
-			vmanip.m_data[vmanip.m_area.index(p1)] = tree_definition.fruitnode;
+			vmanip.m_data[vi] = tree_definition.fruitnode;
 		else
-			vmanip.m_data[vmanip.m_area.index(p1)] = leavesnode;
+			vmanip.m_data[vi] = leavesnode;
 	} else if (ps.range(1, 100) > 20) {
-		vmanip.m_data[vmanip.m_area.index(p1)] = leavesnode;
+		vmanip.m_data[vi] = leavesnode;
 	}
 }
 
@@ -586,7 +586,7 @@ void tree_single_leaves_placement(MMVManip &vmanip, v3f p0,
 	if (vmanip.m_data[vi].getContent() != CONTENT_AIR
 			&& vmanip.m_data[vi].getContent() != CONTENT_IGNORE)
 		return;
-	vmanip.m_data[vmanip.m_area.index(p1)] = leavesnode;
+	vmanip.m_data[vi] = leavesnode;
 }
 
 
@@ -599,7 +599,7 @@ void tree_fruit_placement(MMVManip &vmanip, v3f p0, TreeDef &tree_definition)
 	if (vmanip.m_data[vi].getContent() != CONTENT_AIR
 			&& vmanip.m_data[vi].getContent() != CONTENT_IGNORE)
 		return;
-	vmanip.m_data[vmanip.m_area.index(p1)] = tree_definition.fruitnode;
+	vmanip.m_data[vi] = tree_definition.fruitnode;
 }
 
 
