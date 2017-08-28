@@ -3978,6 +3978,8 @@ Environment access
     * `pos`: The position of the node
     * `timeofday`: `nil` for current time, `0` for night, `0.5` for day
     * Returns a number between `0` and `15`
+    * This function tests 203 nodes in the worst case, which happens very
+      unlikely
 * `minetest.get_artificial_light(param1)`
     * Calculates the artificial light (light from e.g. torches) value from the
       `param1` value.
