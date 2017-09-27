@@ -4,6 +4,7 @@ uniform sampler2D textureFlags;
 
 uniform vec4 skyBgColor;
 uniform float fogDistance;
+uniform float averageBrightness;
 uniform vec3 eyePosition;
 
 varying vec3 vPosition;
@@ -46,7 +47,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -195,8 +196,44 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	float a, b;
+	b = 0;
+
+	if (averageBrightness < 0.15) {
+		b = 6.9216142999862;
+		a = 1.0009872101959;
+	} else if (averageBrightness < 0.25) {
+		b = 3.2812798961849;
+		a = 1.0390475388339;
+	} else if (averageBrightness < 0.35) {
+		b = 1.8010717753886;
+		a = 1.1977795369103;
+	} else if (averageBrightness < 0.45) {
+		b = 0.82216323430739;
+		a = 1.7840574297201;
+	} else if (averageBrightness < 0.55) {
+		b = 8.1838768211219e-12;
+		a = 122191161173.47;
+	} else if (averageBrightness < 0.65) {
+		b = -0.82216323430739;
+		a = -0.78405742972006;
+	} else if (averageBrightness < 0.75) {
+		b = -1.8010717753886;
+		a = -0.1977795369103;
+	} else if (averageBrightness < 0.85) {
+		b = -3.2812798961849;
+		a = -0.039047538833918;
+	} else if (averageBrightness < 0.95) {
+		b = -6.9216142999862;
+		a = -0.00098721019590494;
+	}
+	if (b != 0)
+		color.rgb = (vec3(1.0) - pow(vec3(e), -color.rgb * b)) * a;
+
+	color.rgb = (color.rgb - vec3(0.5)) * 1.3 + vec3(0.5);
+
+	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0);
+
 #ifdef ENABLE_TONE_MAPPING
 	col = applyToneMapping(col);
 #endif

@@ -612,6 +612,7 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	bool m_fog_enabled;
 	CachedPixelShaderSetting<float, 4> m_sky_bg_color;
 	CachedPixelShaderSetting<float> m_fog_distance;
+	CachedPixelShaderSetting<float> m_average_brightness;
 	CachedVertexShaderSetting<float> m_animation_timer_vertex;
 	CachedPixelShaderSetting<float> m_animation_timer_pixel;
 	CachedPixelShaderSetting<float, 3> m_day_light;
@@ -644,6 +645,7 @@ public:
 		m_fog_range(fog_range),
 		m_sky_bg_color("skyBgColor"),
 		m_fog_distance("fogDistance"),
+		m_average_brightness("averageBrightness"),
 		m_animation_timer_vertex("animationTimer"),
 		m_animation_timer_pixel("animationTimer"),
 		m_day_light("dayLight"),
@@ -688,6 +690,9 @@ public:
 			fog_distance = *m_fog_range;
 
 		m_fog_distance.set(&fog_distance, services);
+
+		float avgbr = 0.3f;
+		m_average_brightness.set(&avgbr, services);
 
 		u32 daynight_ratio = (float)m_client->getEnv().getDayNightRatio();
 		video::SColorf sunlight;
