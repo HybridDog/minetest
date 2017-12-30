@@ -321,6 +321,9 @@ public:
 	bool removeNode(v3s16 p);
 	bool swapNode(v3s16 p, const MapNode &n);
 
+	// walks nodes to find the daylight when it's not known
+	u8 findSunlight(v3s16 pos);
+
 	// Find all active objects inside a radius around a point
 	void getObjectsInsideRadius(std::vector<u16> &objects, const v3f &pos, float radius)
 	{

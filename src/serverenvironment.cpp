@@ -1070,6 +1070,67 @@ bool ServerEnvironment::swapNode(v3s16 p, const MapNode &n)
 	return true;
 }
 
+u8 Environment::findSunlight(v3s16 pos)
+{
+	// the offsets for neighbouring nodes with given order
+	static const v3s16 dirs[] = {
+		{x=-1, y=0, z=0}, {x=1, y=0, z=0}, {x=0, y=0, z=-1}, {x=0, y=0, z=1},
+		{x=0, y=-1, z=0}, {x=0, y=1, z=0}
+	};
+
+	const NodeDefManager *ndef = m_server->ndef();
+	u8 found_light = 0;
+	struct stack_entry = {
+		v3s16 pos;
+		u8 dist;
+	};
+	// TODO: dynamic stack size
+	struct stack_entry *stack = new struct stack_entry[100];
+	stack[0] = {pos = pos, dist = 0};
+	int sp = 1;
+	// TODO: find that hash map which works good for positions near each other
+	// (and bad for positions spread everywhere around the map)
+	hashmap<s8> dists = {};
+	dists[hash(pos)] = 0;
+	while (sp > 0) {
+		v3s16 *pos = stack[sp].pos;
+		int dist = stack[sp--].dist + 1;
+		for (int i = 0; i < 6; ++i) {
+			v3s16 p = *pos + dirs[i];
+			int h = hash(p);
+			if (dists[h] != nullptr || dist < dists[h]) {
+				// position to walk
+				bool is_position_ok;
+				MapNode node = env->getMap().getNodeNoEx(p, &is_position_ok);
+				if (!is_position_ok) {
+					// TODO: load mapblock and try again here
+				}
+				const ContentFeatures &def = ndef->get(node);
+				if (is_position_ok && def.sunlight_propagates) {
+					// can walk here
+					u8 daylight = node.param1 & 0x00ff;
+					int possible_finlight = daylight - dist;
+					if (possible_finlight > found_light) {
+						// from here brighter sunlight could come from
+						u8 nightlight = node.param1 >> 4;
+						if (daylight > nightlight)
+							// found a valid daylight
+							found_light = possible_finlight;
+						else
+							// sunlight may be darker, so walk it's neighbours
+							stack[++sp] = {p, dist};
+					}
+					dists[h] = dist;
+				} else {
+					// avoid testing propagation here again
+					dists[h] = -1;
+				}
+			}
+		}
+	}
+	return found_light;
+}
+
 void ServerEnvironment::clearObjects(ClearObjectsMode mode)
 {
 	infostream << "ServerEnvironment::clearObjects(): "

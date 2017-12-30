@@ -402,6 +402,45 @@ int ModApiEnvMod::l_get_node_light(lua_State *L)
 	return 1;
 }
 
+
+// get_natural_light(pos, timeofday)
+// pos = {x=num, y=num, z=num}
+// timeofday: nil = current time, 0 = night, 0.5 = day
+int ModApiEnvMod::l_get_natural_light(lua_State *L)
+{
+	GET_ENV_PTR;
+
+	v3s16 pos = read_v3s16(L, 1);
+
+	bool is_position_ok;
+	MapNode n = env->getMap().getNodeNoEx(pos, &is_position_ok);
+	if (!is_position_ok) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	// if the daylight is 0, nothing needs to be calculated
+	u8 daylight = n.param1 & 0x00ff;
+	if (daylight == 0) {
+		lua_pushinteger(L, 0);
+		return 1;
+	}
+
+	u32 time_of_day = env->getTimeOfDay();
+	if(lua_isnumber(L, 2))
+		time_of_day = 24000.0 * lua_tonumber(L, 2);
+	time_of_day %= 24000;
+	u32 dnr = time_to_daynight_ratio(time_of_day, true);
+
+	// if it's the same as the artificial light, the sunlight needs to be
+	// searched for because the value may not emanate from the sun
+	if (daylight == n.param1 >> 4)
+		daylight = env->findSunlight(pos);
+
+	lua_pushinteger(L, dnr * daylight / 1000);
+	return 1;
+}
+
 // place_node(pos, node)
 // pos = {x=num, y=num, z=num}
 int ModApiEnvMod::l_place_node(lua_State *L)
@@ -1290,6 +1329,7 @@ void ModApiEnvMod::Initialize(lua_State *L, int top)
 	API_FCT(get_node);
 	API_FCT(get_node_or_nil);
 	API_FCT(get_node_light);
+	API_FCT(get_natural_light);
 	API_FCT(place_node);
 	API_FCT(dig_node);
 	API_FCT(punch_node);
