@@ -321,7 +321,7 @@ void set_default_settings()
 	settings->setDefault("post_processing_texture_bits", "16");
 	settings->setDefault("directional_colored_fog", "true");
 	settings->setDefault("inventory_items_animations", "false");
-	settings->setDefault("mip_map", "false");
+	settings->setDefault("mip_map", "off");
 	settings->setDefault("bilinear_filter", "false");
 	settings->setDefault("trilinear_filter", "false");
 	settings->setDefault("anisotropic_filter", "false");

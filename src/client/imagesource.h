@@ -59,7 +59,7 @@ private:
 			std::set<std::string> &source_image_names);
 
 	// Cached settings needed for making textures from meshes
-	bool m_setting_mipmap;
+	bool m_setting_mip_map_enabled;
 	bool m_setting_trilinear_filter;
 	bool m_setting_bilinear_filter;
 	bool m_setting_anisotropic_filter;

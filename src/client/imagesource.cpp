@@ -1464,7 +1464,7 @@ bool ImageSource::generateImagePart(std::string_view part_of_name,
 			 * This is needed since filtering will sample parts of the image
 			 * that are transparent and PNG optimizers often discard the color
 			 * information in those parts. */
-			if (m_setting_mipmap || m_setting_bilinear_filter ||
+			if (m_setting_mip_map_enabled || m_setting_bilinear_filter ||
 				m_setting_trilinear_filter || m_setting_anisotropic_filter) {
 				/* Note: in theory we should pass either 0 or 127 depending on
 				 * if the texture is used with an ALPHA or ALPHA_REF material,
@@ -1785,7 +1785,7 @@ bool ImageSource::generateImagePart(std::string_view part_of_name,
 #undef CHECK_DIM
 
 ImageSource::ImageSource() :
-		m_setting_mipmap{g_settings->getBool("mip_map")},
+		m_setting_mip_map_enabled{g_settings->get("mip_map") != "off"},
 		m_setting_trilinear_filter{g_settings->getBool("trilinear_filter")},
 		m_setting_bilinear_filter{g_settings->getBool("bilinear_filter")},
 		m_setting_anisotropic_filter{g_settings->getBool("anisotropic_filter")}

@@ -8,6 +8,7 @@
 #include "guiscalingfilter.h"
 #include "imagefilters.h"
 #include "imagesource.h"
+#include "mipmap_generation.h"
 #include "renderingengine.h"
 #include "settings.h"
 #include "texturepaths.h"
@@ -182,6 +183,7 @@ private:
 
 	// Cached from settings for making textures from meshes
 	bool mesh_filter_needed;
+	bool m_setting_mip_map_sharp;
 };
 
 IWritableTextureSource *createTextureSource()
@@ -200,11 +202,13 @@ TextureSource::TextureSource()
 	// Cache some settings
 	// Note: Since this is only done once, the game must be restarted
 	// for these settings to take effect.
+	std::string setting_mip_map = g_settings->get("mip_map");
 	mesh_filter_needed =
-			g_settings->getBool("mip_map") ||
+			setting_mip_map != "off" ||
 			g_settings->getBool("trilinear_filter") ||
 			g_settings->getBool("bilinear_filter") ||
 			g_settings->getBool("anisotropic_filter");
+	m_setting_mip_map_sharp = setting_mip_map == "sharp";
 }
 
 TextureSource::~TextureSource()
@@ -327,6 +331,8 @@ u32 TextureSource::generateTexture(const std::string &name)
 	video::ITexture *tex = nullptr;
 
 	if (img) {
+		if (m_setting_mip_map_sharp)
+			generate_custom_mipmaps(*img);
 		// Create texture from resulting image
 		tex = driver->addTexture(name.c_str(), img);
 		guiScalingCache(io::path(name.c_str()), driver, img);
@@ -531,13 +537,19 @@ void TextureSource::rebuildTexture(video::IVideoDriver *driver, TextureInfo &ti)
 		if (ptr) {
 			memcpy(ptr, img->getData(), img->getImageDataSizeInBytes());
 			t->unlock();
-			t->regenerateMipMapLevels();
+			if (m_setting_mip_map_sharp)
+				// TODO: does this work here??
+				generate_custom_mipmaps(*img);
+			else
+				t->regenerateMipMapLevels();
 		} else {
 			warningstream << "TextureSource::rebuildTexture(): lock failed for \""
 				<< ti.name << "\"" << std::endl;
 		}
 	} else {
 		// create new one
+		if (m_setting_mip_map_sharp)
+			generate_custom_mipmaps(*img);
 		t = driver->addTexture(ti.name.c_str(), img);
 	}
 	if (img)

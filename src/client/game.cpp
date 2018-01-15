@@ -958,7 +958,8 @@ bool Game::startup(volatile std::sig_atomic_t *kill,
 	driver = device->getVideoDriver();
 	smgr = m_rendering_engine->get_scene_manager();
 
-	driver->setTextureCreationFlag(video::ETCF_CREATE_MIP_MAPS, g_settings->getBool("mip_map"));
+	driver->setTextureCreationFlag(video::ETCF_CREATE_MIP_MAPS,
+		g_settings->get("mip_map") != "off");
 
 	// Reinit runData
 	runData = GameRunData();
