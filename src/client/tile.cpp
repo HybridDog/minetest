@@ -32,6 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/strfnd.h"
 #include "imagefilters.h"
 #include "guiscalingfilter.h"
+#include "ssim_downscaling.h"
 #include "renderingengine.h"
 #include "util/base64.h"
 
@@ -648,7 +649,13 @@ u32 TextureSource::generateTexture(const std::string &name)
 	if (img != NULL) {
 		img = Align2Npot2(img, driver);
 		// Create texture from resulting image
-		tex = driver->addTexture(name.c_str(), img);
+
+
+		// meins
+		tex = add_texture_with_mipmaps(name, img, driver);
+
+
+		//~ tex = driver->addTexture(name.c_str(), img);
 		guiScalingCache(io::path(name.c_str()), driver, img);
 		img->drop();
 	}
