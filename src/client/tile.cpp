@@ -603,7 +603,36 @@ u32 TextureSource::generateTexture(const std::string &name)
 		img = Align2Npot2(img, driver);
 #endif
 		// Create texture from resulting image
-		tex = driver->addTexture(name.c_str(), img);
+
+
+		core::dimension2d<u32> dim = img->getDimension();
+		int c1 = ceil(logf(dim.Width) / logf(2));
+		int c2 = ceil(logf(dim.Height) / logf(2));
+		int mipmapcnt = MYMAX(c1, c2);
+		video::IImage *smallers[mipmapcnt];
+		for (int k = 0; k < mipmapcnt; ++k) {
+			dim.Width /= 2;
+			if (!dim.Width)
+				dim.Width = 1;
+			dim.Height /= 2;
+			if (!dim.Height)
+				dim.Height = 1;
+			video::IImage *smaller = driver->createImage(img->getColorFormat(),
+				dim);
+			sanity_check(smaller != NULL);
+			video::SColor col = video::SColor(255, 255, 255, 200);
+			smaller->fill(col);
+			smallers[k] = smaller;
+		}
+
+		tex = driver->addTexture(name.c_str(), img, smallers);
+
+		for (int k = 0; k < mipmapcnt; ++k)
+			smallers[k]->drop();
+
+
+
+		//~ tex = driver->addTexture(name.c_str(), img);
 		guiScalingCache(io::path(name.c_str()), driver, img);
 		img->drop();
 	}
