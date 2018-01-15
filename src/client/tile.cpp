@@ -637,6 +637,7 @@ u32 TextureSource::generateTexture(const std::string &name)
 			u8* raw = (u8*) smallers[k]->lock();
 			u32 len = smallers[k]->getImageDataSizeInBytes();
 			memcpy(data + current_pos, raw, len);
+			smallers[k]->unlock();
 			current_pos += len;
 		}
 		// create the texture
