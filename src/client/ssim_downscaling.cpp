@@ -3,8 +3,8 @@
 #include "ssim_downscaling.h"
 
 
-video::ITexture *add_texture_with_mipmaps(std::string &name, video::IImage *img,
-	video::IVideoDriver *driver)
+video::ITexture *add_texture_with_mipmaps(const std::string &name,
+	video::IImage *img, video::IVideoDriver *driver)
 {
 	core::dimension2d<u32> dim = img->getDimension();
 	int c1 = ceil(logf(dim.Width) / logf(2));
