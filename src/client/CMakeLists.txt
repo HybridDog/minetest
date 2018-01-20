@@ -45,6 +45,7 @@ set(client_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/hud.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/imagefilters.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/inputhandler.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/ssim_downscaling.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/joystick_controller.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/keycode.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/localplayer.cpp
@@ -60,7 +61,7 @@ set(client_SRCS
 	${CMAKE_CURRENT_SOURCE_DIR}/wieldmesh.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/shadows/dynamicshadows.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/shadows/dynamicshadowsrender.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/shadows/shadowsshadercallbacks.cpp	
-	${CMAKE_CURRENT_SOURCE_DIR}/shadows/shadowsScreenQuad.cpp	
+	${CMAKE_CURRENT_SOURCE_DIR}/shadows/shadowsshadercallbacks.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/shadows/shadowsScreenQuad.cpp
 	PARENT_SCOPE
 )
