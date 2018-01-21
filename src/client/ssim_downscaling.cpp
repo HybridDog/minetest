@@ -5,6 +5,7 @@
 #include "log.h"
 
 #define SQR_NP 2 // squareroot of the patch size, recommended: 2
+#define LINEAR_RATIO 0.5f // used for mixing in linear downscaled values
 
 
 #define CLAMP(V, A, B) (V) < (A) ? (A) : (V) > (B) ? (B) : (V)
@@ -219,9 +220,12 @@ static void downscale_perc(struct matrix *mat, int s, struct matrix *target)
 		}
 	}
 
-	// divide values in d for the (arithmetic) average
-	for (int i = 0; i < w2 * h2; ++i)
+	for (int i = 0; i < w2 * h2; ++i) {
+		// divide values in d for the (arithmetic) average
 		d[i] *= patch_sz_div;
+		// select a mix between linear and this downscaling
+		d[i] = l[i] * LINEAR_RATIO + d[i] * (1.0f - LINEAR_RATIO);
+	}
 
 	// tidy up
 	delete[] l;
