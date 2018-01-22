@@ -16,13 +16,13 @@ struct matrix {
 	float *data;
 };
 
-/*! \brief get y, cb and cr values each in [0;1] from u8 r, g and b values
+/*! \brief get y, cb and cr values each in [0;1] from u8 b, g and r values
  *
- * there's gamma correction,
+ * there's gamma correction because r, g and b are obviously in srgb format,
  * see http://www.ericbrasseur.org/gamma.html?i=1#Assume_a_gamma_of_2.2
  * 0.5 is added to cb and cr to have them in [0;1]
  */
-static void rgb2ycbcr(u8 r8, u8 g8, u8 b8, float *y, float *cb, float *cr)
+static void rgb2ycbcr(u8 b8, u8 g8, u8 r8, float *y, float *cb, float *cr)
 {
 	float divider = 1.0f / 255.0f;
 	float r = powf(r8 * divider, 2.2f);
@@ -38,7 +38,7 @@ static void rgb2ycbcr(u8 r8, u8 g8, u8 b8, float *y, float *cb, float *cr)
  * numbers from http://www.equasys.de/colorconversion.html
  * if values are too big or small, they're clamped
  */
-static void ycbcr2rgb(float y, float cb, float cr, u8 *r, u8 *g, u8 *b)
+static void ycbcr2rgb(float y, float cb, float cr, u8 *b, u8 *g, u8 *r)
 {
 	float vr = (y + 1.402f * (cr - 0.5f));
 	float vg = (y - 0.344136f * (cb - 0.5f) - 0.714136f * (cr - 0.5f));
@@ -274,6 +274,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 			" but expected " << w*h*4 << std::endl;
 	if (img->getColorFormat() != video::ECF_A8R8G8B8)
 		errorstream << "unexpected colour format" << std::endl;
+	// the bytes are in bgra order (in big endian order)
 
 	// put the original texture into a matrix
 	//~ u32 *raw = (u32 *)img->lock(video::ETLM_READ_ONLY, 0);
