@@ -52,7 +52,7 @@ static void ycbcr2rgb(float y, float cb, float cr, u8 *b, u8 *g, u8 *r)
 	*b = CLAMP(vb * 255.0f, 0, 255);
 }
 
-/*! \brief Convert an rgba image to 4 ycbcr matrices with values in [0, 1]
+/*! \brief Convert an bgra image to 4 ycbcr matrices with values in [0, 1]
  */
 static struct matrix *image_to_matrices(u32 *raw, u32 w, u32 h)
 {
@@ -63,28 +63,28 @@ static struct matrix *image_to_matrices(u32 *raw, u32 w, u32 h)
 		matrices[i].data = new float[w * h];
 	}
 	for (u32 i = 0; i < w * h; ++i) {
-		u8 *rgba = (u8 *)&raw[i];
+		u8 *bgra = (u8 *)&raw[i];
 		// put y, cb, cr and transpatency into the matrices
-		rgb2ycbcr(*rgba, *(rgba+1), *(rgba+2),
+		rgb2ycbcr(*bgra, *(bgra+1), *(bgra+2),
 			&matrices[0].data[i], &matrices[1].data[i], &matrices[2].data[i]);
 		float divider = 1.0f / 255.0f;
-		matrices[3].data[i] = *(rgba+3) * divider;
+		matrices[3].data[i] = *(bgra+3) * divider;
 	}
 	return matrices;
 }
 
-/*! \brief Convert 4 matrices to an rgba image, which is passed
+/*! \brief Convert 4 matrices to an bgra image, which is passed
  */
 static void matrices_to_image(struct matrix *matrices, u32 *raw)
 {
 	int w = matrices[0].w;
 	int h = matrices[0].h;
 	for (int i = 0; i < w * h; ++i) {
-		u8 *rgba = (u8 *)&raw[i];
+		u8 *bgra = (u8 *)&raw[i];
 		ycbcr2rgb(matrices[0].data[i], matrices[1].data[i], matrices[2].data[i],
-			rgba, rgba+1, rgba+2);
+			bgra, bgra+1, bgra+2);
 		float a = matrices[3].data[i] * 255;
-		*(rgba+3) = CLAMP(a, 0, 255);
+		*(bgra+3) = CLAMP(a, 0, 255);
 	}
 }
 
@@ -238,7 +238,8 @@ static void downscale_perc(struct matrix *mat, int s, struct matrix *target)
  * \param downscale_factor Must be a natural number.
  * \param raw The place where the downscaled srgb image is saved to.
  */
-void downscale_an_image(struct matrix *matrices, int downscale_factor, u32 *raw)
+static void downscale_an_image(struct matrix *matrices, int downscale_factor,
+	u32 *raw)
 {
 	int h = matrices[0].h;
 	int w = matrices[0].w;
@@ -255,6 +256,28 @@ void downscale_an_image(struct matrix *matrices, int downscale_factor, u32 *raw)
 	free_matrices(smaller_matrices);
 }
 
+/*! \brief Function for linearly downscaling a stripe
+ *
+ * This also uses gamma correction.
+ * If the longer_stripe had an odd length, one pixel is simply ignored.
+ */
+static void downscale_stripe(u32 *longer_stripe, u32 smaller_length,
+	u32 *smaller_stripe)
+{
+	// bgra order again
+	for (u32 x = 0; x < smaller_length; ++x) {
+		u8 *bgra_l = (u8 *)&longer_stripe[2 * x];
+		u8 *bgra_r = (u8 *)&longer_stripe[2 * x + 1];
+		u8 *bgra_target = (u8 *)&smaller_stripe[x];
+		for (int i = 0; i < 3; ++i) {
+			bgra_target[i] = powf(
+				0.5f * (powf(bgra_l[i], 2.2f) + powf(bgra_r[i], 2.2f)),
+				1.0f / 2.2f);
+		}
+		// alpha doesn't need gamma correction (afaIk)
+		bgra_target[3] = 0.5f * (bgra_l[3] + bgra_r[3]);
+	}
+}
 
 
 video::ITexture *add_texture_with_mipmaps(const std::string &name,
@@ -315,15 +338,19 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		// make current_image point to the next smaller image
 		current_image += w * h;
 	}
+
+	u32 *previous_stripe = current_image - w * h;
+	bool horizontal_stripe = h == 1;
 	for (; k < mipmapcnt; ++k) {
 		// stripe downscaling, this only happens for non-square textures
 		w /= 2;
 		h /= 2;
-		if (w == 0)
-			w = 1;
-		else if (h == 0)
+		if (horizontal_stripe)
 			h = 1;
-		// not yet implemented
+		else
+			w = 1;
+		downscale_stripe(previous_stripe, w * h, current_image);
+		previous_stripe = current_image;
 		current_image += w * h;
 	}
 
