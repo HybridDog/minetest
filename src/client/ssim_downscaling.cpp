@@ -227,6 +227,30 @@ static void downscale_perc(struct matrix *mat, int s, struct matrix *target)
 		d[i] = l[i] * LINEAR_RATIO + d[i] * (1.0f - LINEAR_RATIO);
 	}
 
+/*
+	for (int i = 0; i < w2 * h2; ++i) {
+		// divide values in d for the (arithmetic) average
+		d[i] *= patch_sz_div;
+	}
+
+	// select a mix between linear and this downscaling for low resolutions
+	float linear_ratio = 0.0f;
+	if (w2 <= 3)
+		// likely generating a 2x2 image
+		linear_ratio = 0.75f;
+	else if (w2 <= 7)
+		// likely generating a 4x4 image
+		linear_ratio = 0.5f;
+	else if (w2 <= 15)
+		// likely generating a 8x8 image
+		linear_ratio = 0.3f;
+	if (linear_ratio > 0.0f) {
+		float other_ratio = 1.0f - linear_ratio;
+		for (int i = 0; i < w2 * h2; ++i)
+			d[i] = l[i] * linear_ratio + d[i] * other_ratio;
+	}
+*/
+
 	// tidy up
 	delete[] l;
 	delete[] l2;
