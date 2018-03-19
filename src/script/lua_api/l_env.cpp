@@ -420,7 +420,7 @@ int ModApiEnvMod::l_get_natural_light(lua_State *L)
 	}
 
 	// if the daylight is 0, nothing needs to be calculated
-	u8 daylight = n.param1 & 0x00ff;
+	u8 daylight = n.param1 & 0x0f;
 	if (daylight == 0) {
 		lua_pushinteger(L, 0);
 		return 1;

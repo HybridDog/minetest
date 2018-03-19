@@ -1070,46 +1070,56 @@ bool ServerEnvironment::swapNode(v3s16 p, const MapNode &n)
 	return true;
 }
 
-u8 Environment::findSunlight(v3s16 pos)
+static int hash_node_position(v3s16 pos)
 {
+	return (pos.Z+32768)*65536*65536 + (pos.Y+32768)*65536 + pos.X+32768;
+}
+
+u8 ServerEnvironment::findSunlight(v3s16 pos)
+{
+actionstream << "findsunlight..." << std::endl;
 	// the offsets for neighbouring nodes with given order
 	static const v3s16 dirs[] = {
-		{x=-1, y=0, z=0}, {x=1, y=0, z=0}, {x=0, y=0, z=-1}, {x=0, y=0, z=1},
-		{x=0, y=-1, z=0}, {x=0, y=1, z=0}
+		v3s16(-1, 0, 0), v3s16(1, 0, 0), v3s16(0, 0, -1), v3s16(0, 0, 1),
+		v3s16(0, -1, 0), v3s16(0, 1, 0)
 	};
 
 	const NodeDefManager *ndef = m_server->ndef();
 	u8 found_light = 0;
-	struct stack_entry = {
+	struct stack_entry {
 		v3s16 pos;
-		u8 dist;
+		s8 dist;
 	};
 	// TODO: dynamic stack size
 	struct stack_entry *stack = new struct stack_entry[100];
-	stack[0] = {pos = pos, dist = 0};
+	stack[0] = {pos, 0};
 	int sp = 1;
 	// TODO: find that hash map which works good for positions near each other
 	// (and bad for positions spread everywhere around the map)
-	hashmap<s8> dists = {};
-	dists[hash(pos)] = 0;
+	std::unordered_map<int, s8> dists;
+	dists[hash_node_position(pos)] = 0;
 	while (sp > 0) {
-		v3s16 *pos = stack[sp].pos;
-		int dist = stack[sp--].dist + 1;
+actionstream << "sp" << sp << std::endl;
+		v3s16 pos = stack[sp].pos;
+		s8 dist = stack[sp--].dist + 1;
 		for (int i = 0; i < 6; ++i) {
-			v3s16 p = *pos + dirs[i];
-			int h = hash(p);
-			if (dists[h] != nullptr || dist < dists[h]) {
+			v3s16 p = pos + dirs[i];
+			int h = hash_node_position(p);
+			auto it = dists.find(h);
+			if (it == dists.end() || dist < it->second) {
 				// position to walk
 				bool is_position_ok;
-				MapNode node = env->getMap().getNodeNoEx(p, &is_position_ok);
+				MapNode node = getMap().getNodeNoEx(p, &is_position_ok);
 				if (!is_position_ok) {
 					// TODO: load mapblock and try again here
+					errorstream << "not loaded" << std::endl;
 				}
 				const ContentFeatures &def = ndef->get(node);
 				if (is_position_ok && def.sunlight_propagates) {
 					// can walk here
-					u8 daylight = node.param1 & 0x00ff;
+					u8 daylight = node.param1 & 0x0f;
 					int possible_finlight = daylight - dist;
+actionstream << "poss fin" << possible_finlight << std::endl;
 					if (possible_finlight > found_light) {
 						// from here brighter sunlight could come from
 						u8 nightlight = node.param1 >> 4;
@@ -1128,6 +1138,7 @@ u8 Environment::findSunlight(v3s16 pos)
 			}
 		}
 	}
+	delete[] stack;
 	return found_light;
 }
 
