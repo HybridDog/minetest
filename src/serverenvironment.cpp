@@ -1077,7 +1077,6 @@ static int hash_node_position(v3s16 pos)
 
 u8 ServerEnvironment::findSunlight(v3s16 pos)
 {
-actionstream << "findsunlight..." << std::endl;
 	// the offsets for neighbouring nodes with given order
 	static const v3s16 dirs[] = {
 		v3s16(-1, 0, 0), v3s16(1, 0, 0), v3s16(0, 0, -1), v3s16(0, 0, 1),
@@ -1099,7 +1098,6 @@ actionstream << "findsunlight..." << std::endl;
 	std::unordered_map<int, s8> dists;
 	dists[hash_node_position(pos)] = 0;
 	while (sp > 0) {
-actionstream << "sp" << sp << std::endl;
 		v3s16 pos = stack[sp].pos;
 		s8 dist = stack[sp--].dist + 1;
 		for (int i = 0; i < 6; ++i) {
@@ -1119,7 +1117,6 @@ actionstream << "sp" << sp << std::endl;
 					// can walk here
 					u8 daylight = node.param1 & 0x0f;
 					int possible_finlight = daylight - dist;
-actionstream << "poss fin" << possible_finlight << std::endl;
 					if (possible_finlight > found_light) {
 						// from here brighter sunlight could come from
 						u8 nightlight = node.param1 >> 4;
