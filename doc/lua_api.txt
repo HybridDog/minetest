@@ -3972,12 +3972,13 @@ Environment access
     * `pos`: The position where to measure the light.
     * `timeofday`: `nil` for current time, `0` for night, `0.5` for day
     * Returns a number between `0` and `15` or `nil`
+    * `nil` is returned e.g. when the map isn't loaded at `pos`
 * `minetest.get_natural_light(pos[, timeofday])`
     * Figures out the sunlight (or moonlight) value at pos at the given time of
       day.
     * `pos`: The position of the node
     * `timeofday`: `nil` for current time, `0` for night, `0.5` for day
-    * Returns a number between `0` and `15`
+    * Returns a number between `0` and `15` or `nil`
     * This function tests 203 nodes in the worst case, which happens very
       unlikely
 * `minetest.get_artificial_light(param1)`

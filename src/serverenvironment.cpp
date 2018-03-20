@@ -1070,7 +1070,7 @@ bool ServerEnvironment::swapNode(v3s16 p, const MapNode &n)
 	return true;
 }
 
-static int hash_node_position(v3s16 pos)
+static inline int hash_node_position(v3s16 pos)
 {
 	return (pos.Z+32768)*65536*65536 + (pos.Y+32768)*65536 + pos.X+32768;
 }
@@ -1109,8 +1109,11 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 				bool is_position_ok;
 				MapNode node = getMap().getNodeNoEx(p, &is_position_ok);
 				if (!is_position_ok) {
-					// TODO: load mapblock and try again here
-					errorstream << "not loaded" << std::endl;
+					// this happens very rarely because the map at pos is loaded
+					getMap().emergeBlock(p, false);
+					node = getMap().getNodeNoEx(p, &is_position_ok);
+					if (!is_position_ok)
+						continue;  // not generated
 				}
 				const ContentFeatures &def = ndef->get(node);
 				if (is_position_ok && def.sunlight_propagates) {
