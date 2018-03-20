@@ -1087,21 +1087,21 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 	u8 found_light = 0;
 	struct stack_entry {
 		v3s16 pos;
-		s8 dist;
+		s16 dist;
 	};
-	// TODO: dynamic stack size
-	struct stack_entry *stack = new struct stack_entry[100];
-	stack[0] = {pos, 0};
-	int sp = 1;
-	// TODO: find that hash map which works good for positions near each other
-	// (and bad for positions spread everywhere around the map)
+	std::stack<stack_entry> stack;
+	stack.push({pos, 0});
+	// A hash map which works good for positions near each other (and bad for
+	// positions spread everywhere around the map) could be used here
 	std::unordered_map<int, s8> dists;
 	dists[hash_node_position(pos)] = 0;
-	while (sp > 0) {
-		v3s16 pos = stack[sp].pos;
-		s8 dist = stack[sp--].dist + 1;
-		for (int i = 0; i < 6; ++i) {
-			v3s16 p = pos + dirs[i];
+	while (!stack.empty()) {
+		struct stack_entry e = stack.top();
+		stack.pop();
+		v3s16 pos = e.pos;
+		s8 dist = e.dist + 1;
+		for (v3s16 off : dirs) {
+			v3s16 p = pos + off;
 			int h = hash_node_position(p);
 			auto it = dists.find(h);
 			if (it == dists.end() || dist < it->second) {
@@ -1125,7 +1125,7 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 							found_light = possible_finlight;
 						else
 							// sunlight may be darker, so walk it's neighbours
-							stack[++sp] = {p, dist};
+							stack.push({p, dist});
 					}
 					dists[h] = dist;
 				} else {
@@ -1135,7 +1135,6 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 			}
 		}
 	}
-	delete[] stack;
 	return found_light;
 }
 
