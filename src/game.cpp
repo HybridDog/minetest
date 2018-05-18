@@ -740,6 +740,8 @@ protected:
 		const ToolCapabilities &playeritem_toolcap, f32 dtime);
 	void handlePointingAtObject(const PointedThing &pointed, const ItemStack &playeritem,
 			const v3f &player_position, bool show_debug);
+	void performDigging(const PointedThing &pointed, const v3s16 &nodepos,
+		ClientMap &map, LocalPlayer *player);
 	void handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 			const ToolCapabilities &playeritem_toolcap, f32 dtime);
 	void updateFrame(ProfilerGraph *graph, RunStats *stats, f32 dtime,
@@ -2979,10 +2981,11 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 			           << " (stopped digging)" << std::endl;
 			runData.digging = false;
 		} else if (pointed != runData.pointed_old) {
-			if (pointed.type == POINTEDTHING_NODE
-					&& runData.pointed_old.type == POINTEDTHING_NODE
-					&& pointed.node_undersurface
-							== runData.pointed_old.node_undersurface) {
+			bool nodes_are_pointed = pointed.type == POINTEDTHING_NODE
+					&& runData.pointed_old.type == POINTEDTHING_NODE;
+			f32 dist = (pointed.node_undersurface -
+				runData.pointed_old.node_undersurface).getLengthSQ();
+			if (nodes_are_pointed && dist == 0.0f) {
 				// Still pointing to the same node, but a different face.
 				// Don't reset.
 			} else {
@@ -2990,6 +2993,14 @@ void Game::processPlayerInteraction(f32 dtime, bool show_hud, bool show_debug)
 				           << " (stopped digging)" << std::endl;
 				runData.digging = false;
 				hud->updateSelectionMesh(camera_offset);
+				bool is_creative = true;
+				if (is_creative && nodes_are_pointed && dist == 1.0f) {
+					// in creative mode, when holding LMB, dig the
+					// pointed node if it's next to the new pointed one
+					performDigging(runData.pointed_old,
+						runData.pointed_old.node_undersurface,
+						client->getEnv().getClientMap(), player);
+				}
 			}
 		}
 
@@ -3461,6 +3472,58 @@ void Game::handlePointingAtObject(const PointedThing &pointed, const ItemStack &
 }
 
 
+void Game::performDigging(const PointedThing &pointed, const v3s16 &nodepos,
+	ClientMap &map, LocalPlayer *player)
+{
+	// we successfully dug, now block it from repeating if we want to be safe
+	if (g_settings->getBool("safe_dig_and_place"))
+		runData.digging_blocked = true;
+
+	runData.nodig_delay_timer =
+			runData.dig_time_complete / (float)crack_animation_length;
+
+	// We don't want a corresponding delay to very time consuming nodes
+	// and nodes without digging time (e.g. torches) get a fixed delay.
+	if (runData.nodig_delay_timer > 0.3)
+		runData.nodig_delay_timer = 0.3;
+	else if (runData.dig_instantly)
+		runData.nodig_delay_timer = 0.15;
+
+	bool is_valid_position;
+	MapNode wasnode = map.getNodeNoEx(nodepos, &is_valid_position);
+	if (is_valid_position) {
+		if (client->moddingEnabled() &&
+					client->getScript()->on_dignode(nodepos, wasnode)) {
+			return;
+		}
+
+		const ContentFeatures &f = client->ndef()->get(wasnode);
+		if (f.node_dig_prediction == "air") {
+			client->removeNode(nodepos);
+		} else if (!f.node_dig_prediction.empty()) {
+			content_t id;
+			bool found = client->ndef()->getId(f.node_dig_prediction, id);
+			if (found)
+				client->addNode(nodepos, id, true);
+		}
+		// implicit else: no prediction
+	}
+
+	client->interact(2, pointed);
+
+	if (m_cache_enable_particles) {
+		const ContentFeatures &features =
+			client->getNodeDefManager()->get(wasnode);
+		client->getParticleManager()->addDiggingParticles(client,
+			player, nodepos, wasnode, features);
+	}
+
+
+	// Send event to trigger sound
+	client->getEventManager()->put(new NodeDugEvent(nodepos, wasnode));
+}
+
+
 void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 		const ToolCapabilities &playeritem_toolcap, f32 dtime)
 {
@@ -3544,52 +3607,7 @@ void Game::handleDigging(const PointedThing &pointed, const v3s16 &nodepos,
 
 		runData.dig_time = 0;
 		runData.digging = false;
-		// we successfully dug, now block it from repeating if we want to be safe
-		if (g_settings->getBool("safe_dig_and_place"))
-			runData.digging_blocked = true;
-
-		runData.nodig_delay_timer =
-				runData.dig_time_complete / (float)crack_animation_length;
-
-		// We don't want a corresponding delay to very time consuming nodes
-		// and nodes without digging time (e.g. torches) get a fixed delay.
-		if (runData.nodig_delay_timer > 0.3)
-			runData.nodig_delay_timer = 0.3;
-		else if (runData.dig_instantly)
-			runData.nodig_delay_timer = 0.15;
-
-		bool is_valid_position;
-		MapNode wasnode = map.getNodeNoEx(nodepos, &is_valid_position);
-		if (is_valid_position) {
-			if (client->moddingEnabled() &&
-			    		client->getScript()->on_dignode(nodepos, wasnode)) {
-				return;
-			}
-
-			const ContentFeatures &f = client->ndef()->get(wasnode);
-			if (f.node_dig_prediction == "air") {
-				client->removeNode(nodepos);
-			} else if (!f.node_dig_prediction.empty()) {
-				content_t id;
-				bool found = client->ndef()->getId(f.node_dig_prediction, id);
-				if (found)
-					client->addNode(nodepos, id, true);
-			}
-			// implicit else: no prediction
-		}
-
-		client->interact(2, pointed);
-
-		if (m_cache_enable_particles) {
-			const ContentFeatures &features =
-				client->getNodeDefManager()->get(wasnode);
-			client->getParticleManager()->addDiggingParticles(client,
-				player, nodepos, wasnode, features);
-		}
-
-
-		// Send event to trigger sound
-		client->getEventManager()->put(new NodeDugEvent(nodepos, wasnode));
+		performDigging(pointed, nodepos, map, player);
 	}
 
 	if (runData.dig_time_complete < 100000.0) {
