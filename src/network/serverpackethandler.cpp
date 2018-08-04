@@ -1032,7 +1032,7 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 		actionstream << "Server: NoCheat: " << player->getName()
 				<< " tried to interact while dead; ignoring." << std::endl;
 		if (pointed.type == POINTEDTHING_NODE) {
-			// Re-send block to revert change on client-side
+			// Re-send the whole block to undo placement or dig prediction
 			RemoteClient *client = getClient(pkt->getPeerId());
 			v3s16 blockpos = getNodeBlockPos(pointed.node_undersurface);
 			client->SetBlockNotSent(blockpos);
@@ -1080,18 +1080,20 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 		Make sure the player is allowed to do it
 	*/
 	if (!checkPriv(player->getName(), "interact")) {
-		actionstream<<player->getName()<<" attempted to interact with "
-				<<pointed.dump()<<" without 'interact' privilege"
-				<<std::endl;
-		// Re-send block to revert change on client-side
-		RemoteClient *client = getClient(pkt->getPeerId());
-		// Digging completed -> under
+		actionstream << player->getName() << " attempted to interact with "
+			<< pointed.dump() << " without 'interact' privilege" << std::endl;
+		// This may only happen while revoking interact before the client
+		// receives its change of privileges
+		// Re-send the whole block to undo placement or dig prediction
 		if (action == 2) {
+			// Digging completed -> under
+			RemoteClient *client = getClient(pkt->getPeerId());
 			v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
 			client->SetBlockNotSent(blockpos);
 		}
-		// Placement -> above
 		else if (action == 3) {
+			// Placement -> above
+			RemoteClient *client = getClient(pkt->getPeerId());
 			v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_above, BS));
 			client->SetBlockNotSent(blockpos);
 		}
@@ -1109,10 +1111,13 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 			enable_anticheat && !isSingleplayer()) {
 		float d = player_pos.getDistanceFrom(pointed_pos_under);
 		if (!checkInteractDistance(player, d, pointed.dump())) {
-			// Re-send block to revert change on client-side
-			RemoteClient *client = getClient(pkt->getPeerId());
-			v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-			client->SetBlockNotSent(blockpos);
+			if (action == 2 || action == 3) {
+				// Re-send the whole block to undo placement or dig prediction
+				RemoteClient *client = getClient(pkt->getPeerId());
+				v3s16 blockpos = getNodeBlockPos(
+					floatToInt(pointed_pos_under, BS));
+				client->SetBlockNotSent(blockpos);
+			}
 			return;
 		}
 	}
@@ -1207,6 +1212,7 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 					getNodeBlockPos(p_above), false);
 			}
 
+			ItemStack playeritem = playersao->getWieldedItemOrHand();
 			/* Cheat prevention */
 			bool is_valid_dig = true;
 			if (enable_anticheat && !isSingleplayer()) {
@@ -1224,7 +1230,6 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 					m_script->on_cheat(playersao, "finished_unknown_dig");
 				}
 				// Get player's wielded item
-				ItemStack playeritem = playersao->getWieldedItemOrHand();
 				ToolCapabilities playeritem_toolcap =
 						playeritem.getToolCapabilities(m_itemdef);
 				// Get diggability and expected digging time
@@ -1282,15 +1287,20 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 			if (is_valid_dig && n.getContent() != CONTENT_IGNORE)
 				m_script->node_on_dig(p_under, n, playersao);
 
-			v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
-			RemoteClient *client = getClient(pkt->getPeerId());
-			// Send unusual result (that is, node not being removed)
-			if (m_env->getMap().getNodeNoEx(p_under).getContent() != CONTENT_AIR) {
-				// Re-send block to revert change on client-side
-				client->SetBlockNotSent(blockpos);
-			}
-			else {
-				client->ResendBlockIfOnWire(blockpos);
+			// If the node is not removed, e.g. because of protection,
+			// and dig_prediction is enabled, send the current node to undo
+			// prediction client-side
+			//~ if (n.getContent() != CONTENT_AIR &&
+					//~ !playeritem.getDefinition(m_itemdef
+					//~ ).node_dig_prediction.empty()) {
+			if (n.getContent() != CONTENT_AIR) {
+
+				RemoteClient *client = getClient(pkt->getPeerId());
+		NetworkPacket pkt(TOCLIENT_ADDNODE, 6 + 2 + 1 + 1 + 1);
+		pkt << p_under << n.param0 << n.param1 << n.param2
+			<< 1;
+
+		client->send(pkt->getPeerId(), 0, &pkt, true);
 			}
 		}
 	} // action == 2
@@ -1330,21 +1340,15 @@ void Server::handleCommand_Interact(NetworkPacket* pkt)
 			}
 		}
 
-		// If item has node placement prediction, always send the
+		// If the item has node placement prediction, send the
 		// blocks to make sure the client knows what exactly happened
 		RemoteClient *client = getClient(pkt->getPeerId());
 		v3s16 blockpos = getNodeBlockPos(floatToInt(pointed_pos_above, BS));
 		v3s16 blockpos2 = getNodeBlockPos(floatToInt(pointed_pos_under, BS));
 		if (!item.getDefinition(m_itemdef).node_placement_prediction.empty()) {
-			client->SetBlockNotSent(blockpos);
+			//~ client->SetBlockNotSent(blockpos);
 			if (blockpos2 != blockpos) {
-				client->SetBlockNotSent(blockpos2);
-			}
-		}
-		else {
-			client->ResendBlockIfOnWire(blockpos);
-			if (blockpos2 != blockpos) {
-				client->ResendBlockIfOnWire(blockpos2);
+				//~ client->SetBlockNotSent(blockpos2);
 			}
 		}
 	} // action == 3
