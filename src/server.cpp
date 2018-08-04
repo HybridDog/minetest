@@ -260,7 +260,7 @@ Server::~Server()
 		m_env->kickAllPlayers(SERVER_ACCESSDENIED_SHUTDOWN,
 			kick_msg, reconnect);
 	}
-	
+
 	actionstream << "Server: Shutting down" << std::endl;
 
 	// Do this before stopping the server in case mapgen callbacks need to access
@@ -2170,6 +2170,8 @@ void Server::SendBlockNoLock(session_t peer_id, MapBlock *block, u8 ver,
 	Send(&pkt);
 }
 
+static int mstime_l = 0;
+static v3s16 pos_l;
 void Server::SendBlocks(float dtime)
 {
 	MutexAutoLock envlock(m_env_mutex);
@@ -2227,6 +2229,14 @@ void Server::SendBlocks(float dtime)
 		if (!client)
 			continue;
 
+		int mstime = porting::getTimeMs();
+		v3s16 pos = block_to_send.pos;
+		if (pos == pos_l)
+errorstream << "+" << mstime - mstime_l << " Sending block again to "	<< block_to_send.peer_id << std::endl;
+		else
+errorstream << mstime << " Sending block " << pos.X << ", " << pos.Y << ", " << pos.Z << " to "	<< block_to_send.peer_id << std::endl;
+		mstime_l = mstime;
+		pos_l = pos;
 		SendBlockNoLock(block_to_send.peer_id, block, client->serialization_version,
 				client->net_proto_version);
 
