@@ -227,8 +227,7 @@ void MapgenFlat::makeChunk(BlockMakeData *data)
 	updateLiquid(&data->transforming_liquid, full_node_min, full_node_max);
 
 	if (flags & MG_LIGHT)
-		calcLighting(node_min - v3s16(0, 1, 0), node_max + v3s16(0, 1, 0),
-			full_node_min, full_node_max);
+		markLightDirty(node_min - v3s16(0, 1, 0), node_max + v3s16(0, 1, 0));
 
 	//setLighting(node_min - v3s16(1, 0, 1) * MAP_BLOCKSIZE,
 	//			node_max + v3s16(1, 0, 1) * MAP_BLOCKSIZE, 0xFF);

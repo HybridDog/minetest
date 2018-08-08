@@ -540,6 +540,7 @@ EmergeAction EmergeThread::getBlockOrStartGen(
 	}
 
 	// 3). Attempt to start generation
+	Mapgen::dirtyLightReset();
 	if (allow_gen && m_map->initBlockMake(pos, bmdata))
 		return EMERGE_GENERATED;
 
@@ -587,6 +588,9 @@ MapBlock *EmergeThread::finishGen(v3s16 pos, BlockMakeData *bmdata,
 	} catch (LuaError &e) {
 		m_server->setAsyncFatalError("Lua: finishGen" + std::string(e.what()));
 	}
+
+	// Calculate Lighting
+	m_mapgen->calcLight(minp - MAP_BLOCKSIZE, maxp + MAP_BLOCKSIZE);
 
 	/*
 		Clear generate notifier events

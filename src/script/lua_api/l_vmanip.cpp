@@ -191,8 +191,6 @@ int LuaVoxelManip::l_calc_lighting(lua_State *L)
 		return 0;
 	}
 
-	const NodeDefManager *ndef = getServer(L)->getNodeDefManager();
-	EmergeManager *emerge = getServer(L)->getEmergeManager();
 	MMVManip *vm = o->vm;
 
 	v3s16 yblock = v3s16(0, 1, 0) * MAP_BLOCKSIZE;
@@ -206,49 +204,13 @@ int LuaVoxelManip::l_calc_lighting(lua_State *L)
 	if (!vm->m_area.contains(VoxelArea(pmin, pmax)))
 		throw LuaError("Specified voxel area out of VoxelManipulator bounds");
 
-	Mapgen mg;
-	mg.vm          = vm;
-	mg.ndef        = ndef;
-	mg.water_level = emerge->mgparams->water_level;
-
-	mg.calcLighting(pmin, pmax, fpmin, fpmax, propagate_shadow);
+	Mapgen::markLightDirty(pmin, pmax, propagate_shadow);
 
 	return 0;
 }
 
 int LuaVoxelManip::l_set_lighting(lua_State *L)
 {
-	NO_MAP_LOCK_REQUIRED;
-
-	LuaVoxelManip *o = checkobject(L, 1);
-	if (!o->is_mapgen_vm) {
-		warningstream << "VoxelManip:set_lighting called for a non-mapgen "
-			"VoxelManip object" << std::endl;
-		return 0;
-	}
-
-	if (!lua_istable(L, 2))
-		throw LuaError("VoxelManip:set_lighting called with missing parameter");
-
-	u8 light;
-	light  = (getintfield_default(L, 2, "day",   0) & 0x0F);
-	light |= (getintfield_default(L, 2, "night", 0) & 0x0F) << 4;
-
-	MMVManip *vm = o->vm;
-
-	v3s16 yblock = v3s16(0, 1, 0) * MAP_BLOCKSIZE;
-	v3s16 pmin = lua_istable(L, 3) ? check_v3s16(L, 3) : vm->m_area.MinEdge + yblock;
-	v3s16 pmax = lua_istable(L, 4) ? check_v3s16(L, 4) : vm->m_area.MaxEdge - yblock;
-
-	sortBoxVerticies(pmin, pmax);
-	if (!vm->m_area.contains(VoxelArea(pmin, pmax)))
-		throw LuaError("Specified voxel area out of VoxelManipulator bounds");
-
-	Mapgen mg;
-	mg.vm = vm;
-
-	mg.setLighting(light, pmin, pmax);
-
 	return 0;
 }
 
@@ -260,6 +222,15 @@ int LuaVoxelManip::l_get_light_data(lua_State *L)
 	MMVManip *vm = o->vm;
 
 	u32 volume = vm->m_area.getVolume();
+
+	// Calculate lighting if it is not up to date
+	const NodeDefManager *ndef = getServer(L)->getNodeDefManager();
+	EmergeManager *emerge = getServer(L)->getEmergeManager();
+	Mapgen mg;
+	mg.vm          = vm;
+	mg.ndef        = ndef;
+	mg.water_level = emerge->mgparams->water_level;
+	mg.calcLight(vm->m_area.MinEdge, vm->m_area.MaxEdge);
 
 	lua_newtable(L);
 	for (u32 i = 0; i != volume; i++) {
@@ -291,6 +262,8 @@ int LuaVoxelManip::l_set_light_data(lua_State *L)
 
 		lua_pop(L, 1);
 	}
+
+	Mapgen::markDirtyLightNonzero();
 
 	return 0;
 }

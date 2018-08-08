@@ -190,8 +190,7 @@ public:
 
 	void setLighting(u8 light, v3s16 nmin, v3s16 nmax);
 	void lightSpread(VoxelArea &a, v3s16 p, u8 light);
-	void calcLighting(v3s16 nmin, v3s16 nmax, v3s16 full_nmin, v3s16 full_nmax,
-		bool propagate_shadow = true);
+	void calcLight(v3s16 full_nmin, v3s16 full_nmax);
 	void propagateSunlight(v3s16 nmin, v3s16 nmax, bool propagate_shadow);
 	void spreadLight(v3s16 nmin, v3s16 nmax);
 
@@ -212,12 +211,22 @@ public:
 		MapgenParams *params, EmergeManager *emerge);
 	static MapgenParams *createMapgenParams(MapgenType mgtype);
 	static void getMapgenNames(std::vector<const char *> *mgnames, bool include_hidden);
+	static void markLightDirty(v3s16 nmin, v3s16 nmax,
+		bool propagate_shadow = true);
+	static void markDirtyLightNonzero();
+	static void dirtyLightReset();
 
 private:
 	// isLiquidHorizontallyFlowable() is a helper function for updateLiquid()
 	// that checks whether there are floodable nodes without liquid beneath
 	// the node at index vi.
 	inline bool isLiquidHorizontallyFlowable(u32 vi, v3s16 em);
+
+	static bool dirty_light;
+	static bool dirty_light_reset;
+	static bool dirty_light_propagate_shadow;
+	static v3s16 dirty_light_minp;
+	static v3s16 dirty_light_maxp;
 };
 
 /*

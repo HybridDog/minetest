@@ -469,14 +469,54 @@ void Mapgen::lightSpread(VoxelArea &a, v3s16 p, u8 light)
 }
 
 
-void Mapgen::calcLighting(v3s16 nmin, v3s16 nmax, v3s16 full_nmin, v3s16 full_nmax,
-	bool propagate_shadow)
+void Mapgen::markLightDirty(v3s16 nmin, v3s16 nmax, bool propagate_shadow)
 {
+	if (!dirty_light) {
+		dirty_light_propagate_shadow = propagate_shadow;
+		dirty_light_minp = nmin;
+		dirty_light_maxp = nmax;
+	} else {
+		dirty_light_propagate_shadow =
+			dirty_light_propagate_shadow || propagate_shadow;
+		dirty_light_minp.X = MYMIN(dirty_light_minp.X, nmin.X);
+		dirty_light_minp.Y = MYMIN(dirty_light_minp.Y, nmin.Y);
+		dirty_light_minp.Z = MYMIN(dirty_light_minp.Z, nmin.Z);
+		dirty_light_maxp.X = MYMAX(dirty_light_maxp.X, nmax.X);
+		dirty_light_maxp.Y = MYMAX(dirty_light_maxp.Y, nmax.Y);
+		dirty_light_maxp.Z = MYMAX(dirty_light_maxp.Z, nmax.Z);
+	}
+}
+
+
+void Mapgen::markDirtyLightNonzero()
+{
+	dirty_light_reset = true;
+}
+
+
+void Mapgen::dirtyLightReset()
+{
+	dirty_light = false;
+	dirty_light_reset = false;
+}
+
+
+void Mapgen::calcLight(v3s16 full_nmin, v3s16 full_nmax)
+{
+	if (!dirty_light)
+		return;
+
 	ScopeProfiler sp(g_profiler, "EmergeThread: mapgen lighting update", SPT_AVG);
 	//TimeTaker t("updateLighting");
 
-	propagateSunlight(nmin, nmax, propagate_shadow);
+	if (dirty_light_reset)
+		setLighting(0, dirty_light_minp, dirty_light_maxp);
+
+	propagateSunlight(dirty_light_minp, dirty_light_maxp,
+		dirty_light_propagate_shadow);
 	spreadLight(full_nmin, full_nmax);
+
+	dirty_light_reset = true;
 
 	//printf("updateLighting: %dms\n", t.stop());
 }
