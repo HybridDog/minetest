@@ -261,20 +261,17 @@ function core.check_for_falling(p)
 	-- Round p to prevent falling entities to get stuck.
 	p = vector.round(p)
 
-	-- We make a stack, and manually maintain size for performance.
 	-- Stored in the stack, we will maintain tables with pos, and
 	-- last neighbor visited. This way, when we get back to each
 	-- node, we know which directions we have already walked, and
 	-- which direction is the next to walk.
-	local s = {}
-	local n = 0
+	local s = core.create_stack()
 	-- The neighbor order we will visit from our table.
 	local v = 1
 
 	while true do
 		-- Push current pos onto the stack.
-		n = n + 1
-		s[n] = {p = p, v = v}
+		s:push({p = p, v = v})
 		-- Select next node from neighbor list.
 		p = vector.add(p, check_for_falling_neighbors[v])
 		-- Now we check out the node. If it is in need of an update,
@@ -285,14 +282,12 @@ function core.check_for_falling(p)
 			-- with the v value we were at when we last were at that
 			-- node
 			repeat
-				local pop = s[n]
+				local pop = s:pop()
 				p = pop.p
 				v = pop.v
-				s[n] = nil
-				n = n - 1
 				-- If there's nothing left on the stack, and no
 				-- more sides to walk to, we're done and can exit
-				if n == 0 and v == 11 then
+				if s:is_empty() and v == 11 then
 					return
 				end
 			until v < 11
