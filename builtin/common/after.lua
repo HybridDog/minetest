@@ -1,33 +1,36 @@
-local jobs = {}
+local jobs = core.create_binary_heap(function(a, b)
+	return a.expire < b.expire
+end)
 local time = 0.0
 
 core.register_globalstep(function(dtime)
 	time = time + dtime
 
-	if #jobs < 1 then
+	if jobs:is_empty() then
 		return
 	end
 
-	-- Iterate backwards so that we miss any new timers added by
-	-- a timer callback, and so that we don't skip the next timer
-	-- in the list if we remove one.
-	for i = #jobs, 1, -1 do
-		local job = jobs[i]
-		if time >= job.expire then
-			core.set_last_run_mod(job.mod_origin)
-			job.func(unpack(job.arg))
-			table.remove(jobs, i)
-		end
+	-- Collect all executable jobs before executing so that we miss any new
+	-- timers added by a timer callback.
+	local to_execute = {}
+	while time >= jobs:peek().expire do
+		to_execute[#to_execute+1] = jobs:take()
+	end
+	for i = 1, #to_execute do
+		local job = to_execute[i]
+		core.set_last_run_mod(job.mod_origin)
+		job.func(unpack(job.arg))
 	end
 end)
 
 function core.after(after, func, ...)
-	assert(tonumber(after) and type(func) == "function",
+	after = tonumber(after)
+	assert(after and after == after and type(func) == "function",
 		"Invalid core.after invocation")
-	jobs[#jobs + 1] = {
+	jobs:add({
 		func = func,
 		expire = time + after,
 		arg = {...},
 		mod_origin = core.get_last_run_mod()
-	}
+	})
 end
