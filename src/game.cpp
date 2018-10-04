@@ -3892,14 +3892,26 @@ inline void Game::limitFps(FpsControl *fps_timings, f32 *dtime)
 	u32 time = device->getTimer()->getTime();
 	u32 last_time = fps_timings->last_time;
 
+	float fps_max = g_menumgr.pausesGame()
+		? g_settings->getFloat("pause_fps_max")
+		: g_settings->getFloat("fps_max");
+
 	if (time > last_time)  // Make sure time hasn't overflowed
 		fps_timings->busy_time = time - last_time;
 	else
 		fps_timings->busy_time = 0;
 
-	u32 frametime_min = 1000 / (g_menumgr.pausesGame()
-			? g_settings->getFloat("pause_fps_max")
-			: g_settings->getFloat("fps_max"));
+	if (fps_max == -1.0f) {
+		// fps limiting is disabled
+		if (time > last_time)  // Make sure last_time hasn't overflowed
+			*dtime = (time - last_time) / 1000.0;
+		else
+			*dtime = 0;
+		fps_timings->last_time = time;
+		return;
+	}
+
+	u32 frametime_min = 1000 / fps_max;
 
 	if (fps_timings->busy_time < frametime_min) {
 		fps_timings->sleep_time = frametime_min - fps_timings->busy_time;
