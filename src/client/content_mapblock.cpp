@@ -259,6 +259,34 @@ void MapblockMeshGenerator::drawCuboid(const aabb3f &box,
 			default:
 				break;
 			}
+			bool fsaa_and_no_filtering = true;
+			if (fsaa_and_no_filtering) {
+				const float small_off = 1.0f / (16.0f * 8);
+				switch (j) {
+				case 0:
+					// top left
+					tcoords.X += small_off;
+					tcoords.Y += small_off;
+					break;
+				case 1:
+					// top right
+					tcoords.X -= small_off;
+					tcoords.Y += small_off;
+					break;
+				case 2:
+					// bottom right
+					tcoords.X -= small_off;
+					tcoords.Y -= small_off;
+					break;
+				case 3:
+					// bottom left
+					tcoords.X += small_off;
+					tcoords.Y -= small_off;
+					break;
+				default:
+					break;
+				}
+			}
 		}
 	}
 
