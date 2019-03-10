@@ -6,14 +6,10 @@ local time = 0.0
 core.register_globalstep(function(dtime)
 	time = time + dtime
 
-	if jobs:is_empty() then
-		return
-	end
-
 	-- Collect all executable jobs before executing so that we miss any new
 	-- timers added by a timer callback.
 	local to_execute = {}
-	while time >= jobs:peek().expire do
+	while not jobs:is_empty() and time >= jobs:peek().expire do
 		to_execute[#to_execute+1] = jobs:take()
 	end
 	for i = 1, #to_execute do
