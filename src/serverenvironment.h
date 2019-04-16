@@ -321,7 +321,7 @@ public:
 	bool removeNode(v3s16 p);
 	bool swapNode(v3s16 p, const MapNode &n);
 
-	// walks nodes to find the daylight when it's not known
+	// Find the dalyight value at pos with Septh First Search
 	u8 findSunlight(v3s16 pos);
 
 	// Find all active objects inside a radius around a point
@@ -379,6 +379,13 @@ private:
 			const std::string &savedir, const Settings &conf);
 	static AuthDatabase *openAuthDatabase(const std::string &name,
 			const std::string &savedir, const Settings &conf);
+
+	static u64 get_node_position_key(v3s16 pos)
+	{
+		return (pos.Z+32768)*65536*65536 + (pos.Y+32768)*65536 + pos.X+32768;
+	}
+
+
 	/*
 		Internal ActiveObject interface
 		-------------------------------------------

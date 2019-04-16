@@ -1070,20 +1070,16 @@ bool ServerEnvironment::swapNode(v3s16 p, const MapNode &n)
 	return true;
 }
 
-static inline int hash_node_position(v3s16 pos)
-{
-	return (pos.Z+32768)*65536*65536 + (pos.Y+32768)*65536 + pos.X+32768;
-}
-
 u8 ServerEnvironment::findSunlight(v3s16 pos)
 {
-	// the offsets for neighbouring nodes with given order
+	// Directions for neighbouring nodes with specified order
 	static const v3s16 dirs[] = {
 		v3s16(-1, 0, 0), v3s16(1, 0, 0), v3s16(0, 0, -1), v3s16(0, 0, 1),
 		v3s16(0, -1, 0), v3s16(0, 1, 0)
 	};
 
 	const NodeDefManager *ndef = m_server->ndef();
+	// found_light remembers the highest known sunlight value at pos
 	u8 found_light = 0;
 	struct stack_entry {
 		v3s16 pos;
@@ -1091,10 +1087,8 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 	};
 	std::stack<stack_entry> stack;
 	stack.push({pos, 0});
-	// A hash map which works good for positions near each other (and bad for
-	// positions spread everywhere around the map) could be used here
-	std::unordered_map<int, s8> dists;
-	dists[hash_node_position(pos)] = 0;
+	std::unordered_map<u64, s8> dists;
+	dists[get_node_position_key(pos)] = 0;
 	while (!stack.empty()) {
 		struct stack_entry e = stack.top();
 		stack.pop();
@@ -1102,39 +1096,42 @@ u8 ServerEnvironment::findSunlight(v3s16 pos)
 		s8 dist = e.dist + 1;
 		for (v3s16 off : dirs) {
 			v3s16 p = pos + off;
-			int h = hash_node_position(p);
+			u64 h = get_node_position_key(p);
 			auto it = dists.find(h);
-			if (it == dists.end() || dist < it->second) {
-				// position to walk
-				bool is_position_ok;
-				MapNode node = getMap().getNodeNoEx(p, &is_position_ok);
-				if (!is_position_ok) {
-					// this happens very rarely because the map at pos is loaded
-					getMap().emergeBlock(p, false);
-					node = getMap().getNodeNoEx(p, &is_position_ok);
-					if (!is_position_ok)
-						continue;  // not generated
-				}
-				const ContentFeatures &def = ndef->get(node);
-				if (is_position_ok && def.sunlight_propagates) {
-					// can walk here
-					u8 daylight = node.param1 & 0x0f;
-					int possible_finlight = daylight - dist;
-					if (possible_finlight > found_light) {
-						// from here brighter sunlight could come from
-						u8 nightlight = node.param1 >> 4;
-						if (daylight > nightlight)
-							// found a valid daylight
-							found_light = possible_finlight;
-						else
-							// sunlight may be darker, so walk it's neighbours
-							stack.push({p, dist});
-					}
-					dists[h] = dist;
-				} else {
-					// avoid testing propagation here again
-					dists[h] = -1;
-				}
+			if (it != dists.end() && dist < it->second)
+				continue;
+
+			// Position to walk
+			bool is_position_ok;
+			MapNode node = getMap().getNodeNoEx(p, &is_position_ok);
+			if (!is_position_ok) {
+				// This happens very rarely because the map at pos is loaded
+				getMap().emergeBlock(p, false);
+				node = getMap().getNodeNoEx(p, &is_position_ok);
+				if (!is_position_ok)
+					continue;  // not generated
+			}
+			const ContentFeatures &def = ndef->get(node);
+			if (is_position_ok && def.sunlight_propagates) {
+				// Sunlight could have come from here
+				dists[h] = dist;
+				u8 daylight = node.param1 & 0x0f;
+				int possible_finlight = daylight - dist;
+				if (possible_finlight <= found_light)
+					// Light from here cannot make a brighter light at pos than
+					// found_light
+					continue;
+
+				u8 nightlight = node.param1 >> 4;
+				if (daylight > nightlight)
+					// Found a valid daylight
+					found_light = possible_finlight;
+				else
+					// Sunlight may be darker, so walk it's neighbours
+					stack.push({p, dist});
+			} else {
+				// Do not test propagation here again
+				dists[h] = -1;
 			}
 		}
 	}

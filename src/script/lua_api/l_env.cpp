@@ -419,7 +419,7 @@ int ModApiEnvMod::l_get_natural_light(lua_State *L)
 		return 1;
 	}
 
-	// if the daylight is 0, nothing needs to be calculated
+	// If the daylight is 0, nothing needs to be calculated
 	u8 daylight = n.param1 & 0x0f;
 	if (daylight == 0) {
 		lua_pushinteger(L, 0);
@@ -432,7 +432,7 @@ int ModApiEnvMod::l_get_natural_light(lua_State *L)
 	time_of_day %= 24000;
 	u32 dnr = time_to_daynight_ratio(time_of_day, true);
 
-	// if it's the same as the artificial light, the sunlight needs to be
+	// If it's the same as the artificial light, the sunlight needs to be
 	// searched for because the value may not emanate from the sun
 	if (daylight == n.param1 >> 4)
 		daylight = env->findSunlight(pos);

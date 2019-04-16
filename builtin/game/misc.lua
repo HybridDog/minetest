@@ -167,7 +167,7 @@ function core.setting_get_pos(name)
 end
 
 
--- see l_env.cpp for the other functions
+-- See l_env.cpp for the other functions
 function core.get_artificial_light(param1)
 	return math.floor(param1 / 16)
 end
