@@ -123,5 +123,16 @@ void main(void)
 		- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
 	col = mix(skyBgColor, col, clarity);
 
+#ifdef ENABLE_DEBANDING
+	// Code copy-pasted from the node fragment shader
+	int window_x = int(gl_FragCoord.x);
+	int window_y = int(gl_FragCoord.y);
+	float quarter_colour = 1.0f / 1024.0f;
+	if (mod(window_x + window_y, 2) == 1)
+		col.rgb += vec3(quarter_colour);
+	else
+		col.rgb -= vec3(quarter_colour);
+#endif
+
 	gl_FragColor = vec4(col.rgb, base.a);
 }

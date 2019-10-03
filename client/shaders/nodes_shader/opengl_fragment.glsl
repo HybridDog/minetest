@@ -55,7 +55,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -204,8 +204,8 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0);
+
 #ifdef ENABLE_TONE_MAPPING
 	col = applyToneMapping(col);
 #endif
@@ -223,6 +223,19 @@ void main(void)
 		- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
 	col = mix(skyBgColor, col, clarity);
 	col = vec4(col.rgb, base.a);
+
+#ifdef ENABLE_DEBANDING
+	// Increase/Decrease the pixel colour values slightly in a chessboard
+	// pattern to achieve a simple dithering against banding
+	int window_x = int(gl_FragCoord.x);
+	int window_y = int(gl_FragCoord.y);
+	// Assume 8 bit r, g and b values, offset values a bit to affect rounding
+	float quarter_colour = 1.0f / 1024.0f;
+	if (mod(window_x + window_y, 2) == 1)
+		col.rgb += vec3(quarter_colour);
+	else
+		col.rgb -= vec3(quarter_colour);
+#endif
 
 	gl_FragColor = col;
 }

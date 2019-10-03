@@ -742,6 +742,9 @@ ShaderInfo generate_shader(const std::string &name, u8 material_type, u8 drawtyp
 	if (g_settings->getBool("tone_mapping"))
 		shaders_header += "#define ENABLE_TONE_MAPPING\n";
 
+	if (g_settings->getBool("debanding"))
+		shaders_header += "#define ENABLE_DEBANDING\n";
+
 	shaders_header += "#define FOG_START ";
 	shaders_header += ftos(rangelim(g_settings->getFloat("fog_start"), 0.0f, 0.99f));
 	shaders_header += "\n";
