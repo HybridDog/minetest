@@ -55,7 +55,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -204,11 +204,17 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0);
+
 #ifdef ENABLE_TONE_MAPPING
 	col = applyToneMapping(col);
 #endif
+
+	// Spatial multiplex transparency
+	float alpha = base.a;
+	if (mod(int(gl_FragCoord.x) + int(gl_FragCoord.y), 2) == 0) {
+		alpha += 0.5;
+	}
 
 	// Due to a bug in some (older ?) graphics stacks (possibly in the glsl compiler ?),
 	// the fog will only be rendered correctly if the last operation before the
@@ -222,7 +228,7 @@ void main(void)
 	float clarity = clamp(fogShadingParameter
 		- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
 	col = mix(skyBgColor, col, clarity);
-	col = vec4(col.rgb, base.a);
+	col = vec4(col.rgb, alpha);
 
 	gl_FragColor = col;
 }
