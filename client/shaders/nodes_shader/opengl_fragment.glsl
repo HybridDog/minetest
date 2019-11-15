@@ -55,7 +55,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -79,13 +79,6 @@ float intensity(vec3 color)
 float get_rgb_height(vec2 uv)
 {
 	return intensity(texture2D(baseTexture, uv).rgb);
-}
-
-vec4 get_normal_map(vec2 uv)
-{
-	vec4 bump = texture2D(normalTexture, uv).rgba;
-	bump.xyz = normalize(bump.xyz * 2.0 - 1.0);
-	return bump;
 }
 
 float find_intersection(vec2 dp, vec2 ds)
@@ -165,10 +158,19 @@ void main(void)
 	}
 #endif
 
+	bool is_emissive = false;
 #if USE_NORMALMAPS == 1
 	if (normalTexturePresent) {
-		bump = get_normal_map(uv);
-		use_normalmap = true;
+		bump = texture2D(normalTexture, uv).rgba;
+		// Calculate the tangent space normal vector from the rgb values in the
+		// normalmap texture
+		bump.xyz = bump.rgb * 2.0 - 1.0;
+		// Enable emissive lighting iff the normal vector is probably invalid
+		is_emissive = length(bump.xyz) < 0.007;
+		if (!is_emissive) {
+			bump.xyz = normalize(bump.xyz);
+			use_normalmap = true;
+		}
 	}
 #endif
 
@@ -191,6 +193,7 @@ void main(void)
 	vec4 base = texture2D(baseTexture, uv).rgba;
 
 #ifdef ENABLE_BUMPMAPPING
+	// use_normalmap is false if is_emissive is true
 	if (use_normalmap) {
 		vec3 L = normalize(lightVec);
 		vec3 E = normalize(eyeVec);
@@ -204,11 +207,14 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	vec4 col = vec4(color.rgb, 1.0);
+	if (!is_emissive) {
+		col.rgb *= gl_Color.rgb;
+
 #ifdef ENABLE_TONE_MAPPING
-	col = applyToneMapping(col);
+		col = applyToneMapping(col);
 #endif
+	}
 
 	// Due to a bug in some (older ?) graphics stacks (possibly in the glsl compiler ?),
 	// the fog will only be rendered correctly if the last operation before the
