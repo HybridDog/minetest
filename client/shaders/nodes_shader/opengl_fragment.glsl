@@ -189,6 +189,13 @@ void main(void)
 	}
 #endif
 	vec4 base = texture2D(baseTexture, uv).rgba;
+	if (base.a == 0.0)
+		// Invisible fragments can be skipped
+		discard;
+	if (base.a < 1.0) {
+		// for testing with mipmapping
+		base = texture2D(baseTexture, uv, -5.0).rgba;
+	}
 
 #ifdef ENABLE_BUMPMAPPING
 	if (use_normalmap) {
@@ -210,12 +217,6 @@ void main(void)
 	col = applyToneMapping(col);
 #endif
 
-	// Spatial multiplex transparency
-	float alpha = base.a;
-	if (mod(int(gl_FragCoord.x) + int(gl_FragCoord.y), 2) == 0) {
-		alpha += 0.5;
-	}
-
 	// Due to a bug in some (older ?) graphics stacks (possibly in the glsl compiler ?),
 	// the fog will only be rendered correctly if the last operation before the
 	// clamp() is an addition. Else, the clamp() seems to be ignored.
@@ -228,7 +229,7 @@ void main(void)
 	float clarity = clamp(fogShadingParameter
 		- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
 	col = mix(skyBgColor, col, clarity);
-	col = vec4(col.rgb, alpha);
+	col = vec4(col.rgb, base.a);
 
 	gl_FragColor = col;
 }
