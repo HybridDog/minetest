@@ -552,6 +552,21 @@ minetest.register_craft({
 	recipe = {{'stairs:slab_tiled'}}
 })
 
+
+minetest.register_node("experimental:height_pyramid", {
+	description = "Bumpmapping and Parallax Occlusion Tester",
+	tiles = {"experimental_height_pyramid.png"},
+	groups = {cracky=2},
+})
+
+-- With this we can validate rotations etc., e.g. test Tangent Space correctness
+stairs.register_stair_and_slab("height_pyramid", "experimantal:height_pyramid",
+	{cracky=2},
+	{"experimental_height_pyramid.png"},
+	"height_pyramid stair",
+	"height_pyramid slab")
+
+
 minetest.register_craftitem("experimental:tester_tool_1", {
 	description = "Tester Tool 1",
 	inventory_image = "experimental_tester_tool_1.png",
