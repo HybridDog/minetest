@@ -55,7 +55,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -85,6 +85,7 @@ vec4 get_normal_map(vec2 uv)
 {
 	vec4 bump = texture2D(normalTexture, uv).rgba;
 	bump.xyz = normalize(bump.xyz * 2.0 - 1.0);
+	bump.y = -bump.y;
 	return bump;
 }
 
@@ -192,11 +193,16 @@ void main(void)
 
 #ifdef ENABLE_BUMPMAPPING
 	if (use_normalmap) {
-		vec3 L = normalize(lightVec);
-		vec3 E = normalize(eyeVec);
-		float specular = pow(clamp(dot(reflect(L, bump.xyz), E), 0.0, 1.0), 1.0);
-		float diffuse = dot(-E,bump.xyz);
-		color = (diffuse + 0.1 * specular) * base.rgb;
+		vec3 tsL = normalize(tsLightVec);
+		float diffuse = max(dot(tsL, bump.xyz), 0.0) * 0.4;
+		vec3 tsE = normalize(tsEyeVec);
+		vec3 halfway = normalize(tsE + tsL);
+		float specular = pow(max(dot(halfway, bump.xyz), 0.0), 4096.0);
+		float ambient = 0.04;
+		ambient = pow(ambient, 1.0/2.2);
+		diffuse = pow(diffuse, 1.0/2.2);
+		specular = pow(specular, 1.0/2.2);
+		color = (diffuse + ambient) * base.rgb + vec3(specular);
 	} else {
 		color = base.rgb;
 	}
@@ -204,8 +210,8 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0);
+
 #ifdef ENABLE_TONE_MAPPING
 	col = applyToneMapping(col);
 #endif

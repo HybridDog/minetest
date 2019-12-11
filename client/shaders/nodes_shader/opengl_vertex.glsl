@@ -163,7 +163,8 @@ float disp_z;
 
 	vec3 v;
 
-	lightVec = sunPosition - worldPosition;
+	//~ lightVec = sunPosition - worldPosition;
+	lightVec = (gl_ModelViewMatrix * vec4(0.0, 1.0, 0.1, 0.0)).xyz;
 	v.x = dot(lightVec, tangent);
 	v.y = dot(lightVec, binormal);
 	v.z = dot(lightVec, normal);
@@ -183,7 +184,7 @@ float disp_z;
 	vec4 color;
 	// The alpha gives the ratio of sunlight in the incoming light.
 	float nightRatio = 1 - gl_Color.a;
-	color.rgb = gl_Color.rgb * (gl_Color.a * dayLight.rgb + 
+	color.rgb = gl_Color.rgb * (gl_Color.a * dayLight.rgb +
 		nightRatio * artificialLight.rgb) * 2;
 	color.a = 1;
 
