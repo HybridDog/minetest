@@ -17,10 +17,11 @@ varying vec3 vPosition;
 // precision must be considered).
 varying vec3 worldPosition;
 
-varying vec3 eyeVec;
-varying vec3 lightVec;
+varying float eyeVecLength;
 varying vec3 tsEyeVec;
-varying vec3 tsLightVec;
+varying vec3 tsLightX;
+varying vec3 tsLightY;
+varying vec3 tsLightZ;
 varying float area_enable_parallax;
 
 // Color of the light emitted by the light sources.
@@ -44,6 +45,12 @@ float triangleWave(float x)
 float smoothTriangleWave(float x)
 {
 	return smoothCurve(triangleWave(x)) * 2.0 - 1.0;
+}
+
+vec3 convert_to_ts(vec3 normal, vec3 tangent, vec3 binormal, vec3 v)
+{
+	v = (gl_ModelViewMatrix * vec4(v, 0.0)).xyz;
+	return normalize(vec3(dot(v, tangent), dot(v, binormal), dot(v, normal)));
 }
 
 // OpenGL < 4.3 does not support continued preprocessor lines
@@ -161,19 +168,14 @@ float disp_z;
 	tangent = normalize(gl_NormalMatrix * gl_MultiTexCoord1.xyz);
 	binormal = normalize(gl_NormalMatrix * gl_MultiTexCoord2.xyz);
 
-	vec3 v;
+	tsLightX = convert_to_ts(normal, tangent, binormal, vec3(1.0, 0.0, 0.0));
+	tsLightY = convert_to_ts(normal, tangent, binormal, vec3(0.0, 1.0, 0.0));
+	tsLightZ = convert_to_ts(normal, tangent, binormal, vec3(0.0, 0.0, 1.0));
 
-	//~ lightVec = sunPosition - worldPosition;
-	lightVec = (gl_ModelViewMatrix * vec4(0.0, 1.0, 0.1, 0.0)).xyz;
-	v.x = dot(lightVec, tangent);
-	v.y = dot(lightVec, binormal);
-	v.z = dot(lightVec, normal);
-	tsLightVec = normalize (v);
-
-	eyeVec = -(gl_ModelViewMatrix * gl_Vertex).xyz;
-	v.x = dot(eyeVec, tangent);
-	v.y = dot(eyeVec, binormal);
-	v.z = dot(eyeVec, normal);
+	vec3 eyeVec = -(gl_ModelViewMatrix * gl_Vertex).xyz;
+	eyeVecLength = length(eyeVec);
+	vec3 v = vec3(dot(eyeVec, tangent), dot(eyeVec, binormal),
+		dot(eyeVec, normal));
 	tsEyeVec = normalize (v);
 
 	// Calculate color.

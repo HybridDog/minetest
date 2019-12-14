@@ -44,6 +44,9 @@ inline static void applyShadeFactor(video::SColor& color, float factor)
 
 void applyFacesShading(video::SColor &color, const v3f &normal)
 {
+	bool shaders_on = true;
+	if (shaders_on)
+		return;
 	/*
 		Some drawtypes have normals set to (0, 0, 0), this must result in
 		maximum brightness: shade factor 1.0.

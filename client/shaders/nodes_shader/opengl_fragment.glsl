@@ -19,10 +19,11 @@ varying vec3 vPosition;
 varying vec3 worldPosition;
 varying float area_enable_parallax;
 
-varying vec3 eyeVec;
+varying float eyeVecLength;
 varying vec3 tsEyeVec;
-varying vec3 lightVec;
-varying vec3 tsLightVec;
+varying vec3 tsLightX;
+varying vec3 tsLightY;
+varying vec3 tsLightZ;
 
 bool normalTexturePresent = false;
 
@@ -79,6 +80,29 @@ float intensity(vec3 color)
 float get_rgb_height(vec2 uv)
 {
 	return intensity(texture2D(baseTexture, uv).rgb);
+}
+
+// Do not use this for light source nodes
+float directional_ambient(vec3 normal)
+{
+	// See client/mesh.cpp
+	vec3 light = vec3(0.670820f, 1.000000f, 0.836660f);
+	vec3 v;
+	float strength;
+	strength = dot(normal, tsLightX);
+	v.x = max(strength, -strength);
+	strength = dot(normal, tsLightZ);
+	v.z = max(strength, -strength);
+	strength = dot(normal, tsLightY);
+	if (strength < 0.0f) {
+		// light from bottom is weaker than light from above
+		light.y = 0.447213f;
+		strength = -strength;
+	}
+	v.y = strength;
+
+	v = normalize(v);
+	return dot(v * v, light);
 }
 
 vec4 get_normal_map(vec2 uv)
@@ -192,20 +216,13 @@ void main(void)
 	vec4 base = texture2D(baseTexture, uv).rgba;
 
 #ifdef ENABLE_BUMPMAPPING
-	if (use_normalmap) {
-		vec3 tsL = normalize(tsLightVec);
-		float diffuse = max(dot(tsL, bump.xyz), 0.0) * 0.4;
-		vec3 tsE = normalize(tsEyeVec);
-		vec3 halfway = normalize(tsE + tsL);
-		float specular = pow(max(dot(halfway, bump.xyz), 0.0), 4096.0);
-		float ambient = 0.04;
-		ambient = pow(ambient, 1.0/2.2);
-		diffuse = pow(diffuse, 1.0/2.2);
-		specular = pow(specular, 1.0/2.2);
-		color = (diffuse + ambient) * base.rgb + vec3(specular);
-	} else {
-		color = base.rgb;
-	}
+	vec3 normal = bump.xyz;
+	if (!use_normalmap)
+		normal = vec3(0.0, 0.0, 1.0);
+	//~ normal.z *= 0.001;
+	//~ normal = normalize(normal);
+	float light_strength = directional_ambient(normal);
+	color = light_strength * base.rgb;
 #else
 	color = base.rgb;
 #endif
@@ -226,7 +243,7 @@ void main(void)
 	// should be more efficient as well.
 	// Note: clarity = (1 - fogginess)
 	float clarity = clamp(fogShadingParameter
-		- fogShadingParameter * length(eyeVec) / fogDistance, 0.0, 1.0);
+		- fogShadingParameter * eyeVecLength / fogDistance, 0.0, 1.0);
 	col = mix(skyBgColor, col, clarity);
 	col = vec4(col.rgb, base.a);
 
