@@ -91,6 +91,11 @@ void TestIrrPtr::testRefCounting()
 			obj->getReferenceCount());
 }
 
+// GCC diagnostic works with clang, too
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wself-assign-overloaded"
+#pragma GCC diagnostic ignored "-Wself-move"
+
 void TestIrrPtr::testSelfAssignment()
 {
 	irr_ptr<IReferenceCounted> p1{new IReferenceCounted()};
@@ -129,3 +134,5 @@ void TestIrrPtr::testNullHandling()
 	UASSERT(!p2);
 	UASSERT(!p3);
 }
+
+#pragma GCC diagnostic pop
