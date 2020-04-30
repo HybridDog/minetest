@@ -40,6 +40,11 @@ local labels = {
 	},
 }
 
+labels.undersampling = {fgettext("No Undersampling")}
+for i = 2, 8 do
+	labels.undersampling[i] = fgettext(i .. "x")
+end
+
 local dd_options = {
 	leaves = {
 		table.concat(labels.leaves, ","),
@@ -56,6 +61,10 @@ local dd_options = {
 	mipmap = {
 		table.concat(labels.mipmap, ","),
 		{"", "mip_map", "anisotropic_filter"}
+	},
+	undersampling = {
+		table.concat(labels.undersampling, ","),
+		--~ {1, 2, 3, 4, 5, 6, 7, 8}
 	},
 }
 
@@ -92,7 +101,25 @@ local getSettingIndex = {
 		end
 		return 1
 	end,
+	Undersampling = function()
+		local undersampling = tonumber(core.settings:get("undersampling")) or 1
+		local valid_value = math.min(math.max(math.floor(undersampling), 1), 8)
+		if valid_value ~= undersampling then
+			minetest.log("warning", "undersampling set to an invalid value: " ..
+				undersampling)
+		end
+		return valid_value
+	end,
 }
+
+local function undersampling_fname_to_name(fname)
+	for i = 1, #labels.undersampling do
+		if fname == labels.undersampling[i] then
+			return i
+		end
+	end
+	return 0
+end
 
 local function dlg_confirm_reset_formspec(data)
 	return  "size[8,3]" ..
@@ -163,6 +190,10 @@ local function formspec(tabview, name, tabdata)
 				.. getSettingIndex.Filter() .. "]" ..
 		"dropdown[4.25,1.35;3.5;dd_mipmap;" .. dd_options.mipmap[1] .. ";"
 				.. getSettingIndex.Mipmap() .. "]" ..
+		"label[4.25,2.15;" .. fgettext("Undersampling:") .. "]" ..
+		"dropdown[4.25,2.6;3.5;dd_undersampling;" ..
+			dd_options.undersampling[1] .. ";" ..
+			getSettingIndex.Undersampling() .. "]" ..
 		"label[4.25,3.45;" .. fgettext("Screen:") .. "]" ..
 		"checkbox[4.25,3.6;cb_autosave_screensize;" .. fgettext("Autosave Screen Size") .. ";"
 				.. dump(core.settings:get_bool("autosave_screensize")) .. "]" ..
@@ -360,6 +391,11 @@ local function handle_settings_buttons(this, fields, tabname, tabdata)
 	elseif fields["dd_mipmap"] == labels.mipmap[3] then
 		core.settings:set("mip_map", "true")
 		core.settings:set("anisotropic_filter", "true")
+		ddhandled = true
+	end
+	if fields["dd_undersampling"] then
+		local value = undersampling_fname_to_name(fields["dd_undersampling"])
+		core.settings:set("undersampling", value)
 		ddhandled = true
 	end
 	if fields["dd_touchthreshold"] then
