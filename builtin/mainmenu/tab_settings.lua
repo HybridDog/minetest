@@ -38,12 +38,6 @@ local labels = {
 		fgettext("Mipmap"),
 		fgettext("Mipmap + Aniso. Filter")
 	},
-	antialiasing = {
-		fgettext("None"),
-		fgettext("2x"),
-		fgettext("4x"),
-		fgettext("8x")
-	}
 }
 
 local dd_options = {
@@ -63,10 +57,6 @@ local dd_options = {
 		table.concat(labels.mipmap, ","),
 		{"", "mip_map", "anisotropic_filter"}
 	},
-	antialiasing = {
-		table.concat(labels.antialiasing, ","),
-		{"0", "2", "4", "8"}
-	}
 }
 
 local getSettingIndex = {
@@ -102,25 +92,7 @@ local getSettingIndex = {
 		end
 		return 1
 	end,
-	Antialiasing = function()
-		local antialiasing_setting = core.settings:get("fsaa")
-		for i = 1, #dd_options.antialiasing[2] do
-			if antialiasing_setting == dd_options.antialiasing[2][i] then
-				return i
-			end
-		end
-		return 1
-	end
 }
-
-local function antialiasing_fname_to_name(fname)
-	for i = 1, #labels.antialiasing do
-		if fname == labels.antialiasing[i] then
-			return dd_options.antialiasing[2][i]
-		end
-	end
-	return 0
-end
 
 local function dlg_confirm_reset_formspec(data)
 	return  "size[8,3]" ..
@@ -179,10 +151,6 @@ local function formspec(tabview, name, tabdata)
 				.. dump(core.settings:get_bool("smooth_lighting")) .. "]" ..
 		"checkbox[0.25,0.5;cb_particles;" .. fgettext("Particles") .. ";"
 				.. dump(core.settings:get_bool("enable_particles")) .. "]" ..
-		"checkbox[0.25,1;cb_3d_clouds;" .. fgettext("3D Clouds") .. ";"
-				.. dump(core.settings:get_bool("enable_3d_clouds")) .. "]" ..
-		"checkbox[0.25,1.5;cb_opaque_water;" .. fgettext("Opaque Water") .. ";"
-				.. dump(core.settings:get_bool("opaque_water")) .. "]" ..
 		"checkbox[0.25,2.0;cb_connected_glass;" .. fgettext("Connected Glass") .. ";"
 				.. dump(core.settings:get_bool("connected_glass")) .. "]" ..
 		"dropdown[0.25,2.8;3.5;dd_node_highlighting;" .. dd_options.node_highlighting[1] .. ";"
@@ -195,9 +163,6 @@ local function formspec(tabview, name, tabdata)
 				.. getSettingIndex.Filter() .. "]" ..
 		"dropdown[4.25,1.35;3.5;dd_mipmap;" .. dd_options.mipmap[1] .. ";"
 				.. getSettingIndex.Mipmap() .. "]" ..
-		"label[4.25,2.15;" .. fgettext("Antialiasing:") .. "]" ..
-		"dropdown[4.25,2.6;3.5;dd_antialiasing;" .. dd_options.antialiasing[1] .. ";"
-				.. getSettingIndex.Antialiasing() .. "]" ..
 		"label[4.25,3.45;" .. fgettext("Screen:") .. "]" ..
 		"checkbox[4.25,3.6;cb_autosave_screensize;" .. fgettext("Autosave Screen Size") .. ";"
 				.. dump(core.settings:get_bool("autosave_screensize")) .. "]" ..
@@ -298,14 +263,6 @@ local function handle_settings_buttons(this, fields, tabname, tabdata)
 		core.settings:set("enable_particles", fields["cb_particles"])
 		return true
 	end
-	if fields["cb_3d_clouds"] then
-		core.settings:set("enable_3d_clouds", fields["cb_3d_clouds"])
-		return true
-	end
-	if fields["cb_opaque_water"] then
-		core.settings:set("opaque_water", fields["cb_opaque_water"])
-		return true
-	end
 	if fields["cb_connected_glass"] then
 		core.settings:set("connected_glass", fields["cb_connected_glass"])
 		return true
@@ -403,11 +360,6 @@ local function handle_settings_buttons(this, fields, tabname, tabdata)
 	elseif fields["dd_mipmap"] == labels.mipmap[3] then
 		core.settings:set("mip_map", "true")
 		core.settings:set("anisotropic_filter", "true")
-		ddhandled = true
-	end
-	if fields["dd_antialiasing"] then
-		core.settings:set("fsaa",
-			antialiasing_fname_to_name(fields["dd_antialiasing"]))
 		ddhandled = true
 	end
 	if fields["dd_touchthreshold"] then
