@@ -25,6 +25,61 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/tile.h"
 
 
+
+// With the IShaderConstantSetter, uniforms of the shader can be set (probably)
+class OversampleShaderConstantSetter : public IShaderConstantSetter
+{
+public:
+	OversampleShaderConstantSetter(RenderingCorePlain *core):
+		m_core(core),
+		m_resolution("resolution")
+	{}
+
+	~OversampleShaderConstantSetter() override = default;
+
+	void onSetConstants(video::IMaterialRendererServices *services,
+			bool is_highlevel) override
+	{
+		if (!is_highlevel)
+			return;
+
+		// TODO: Why is the resolution uniform never set?
+
+		v2u32 render_size = m_core->getScreensize();
+		float as_array[2] = {
+			(float)render_size.X,
+			(float)render_size.Y,
+		};
+		m_resolution.set(as_array, services);
+	}
+
+	//~ void onSetMaterial(const video::SMaterial& material) override
+	//~ {
+		//~ m_render_size = render_size;
+	//~ }
+
+private:
+	RenderingCorePlain *m_core;
+	CachedPixelShaderSetting<float, 2> m_resolution;
+};
+
+// Each shader requires a constant setter and a factory for it
+class OversampleShaderConstantSetterFactory : public IShaderConstantSetterFactory
+{
+	RenderingCorePlain *m_core;
+public:
+	OversampleShaderConstantSetterFactory(RenderingCorePlain *core):
+		m_core(core)
+	{}
+
+	virtual IShaderConstantSetter* create()
+	{
+		return new OversampleShaderConstantSetter(m_core);
+	}
+};
+
+
+
 inline u32 scaledown(u32 coef, u32 size)
 {
 	return (size + coef - 1) / coef;
@@ -38,6 +93,7 @@ RenderingCorePlain::RenderingCorePlain(
 
 	IWritableShaderSource *s = client->getShaderSource();
 	u32 shader = s->getShader("oversampling1", TILE_MATERIAL_BASIC, 0);
+	// The material has the texture inputs for the oversampling shader
 	mat1.UseMipMaps = false;
 	mat1.MaterialType = s->getShaderInfo(shader).material;
 	mat1.TextureLayer[0].AnisotropicFilter = false;
@@ -45,6 +101,10 @@ RenderingCorePlain::RenderingCorePlain(
 	mat1.TextureLayer[0].TrilinearFilter = false;
 	mat1.TextureLayer[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
 	mat1.TextureLayer[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+
+	s->addShaderConstantSetterFactory(new
+		OversampleShaderConstantSetterFactory(this));
+
 }
 
 void RenderingCorePlain::initTextures()
@@ -53,6 +113,8 @@ void RenderingCorePlain::initTextures()
 	rendered = driver->addRenderTargetTexture(render_size, "3d_render",
 		//~ video::ECF_A8R8G8B8);
 		video::ECF_A16B16G16R16F);
+	// The rendertargets are required when rendering to more than just a single
+	// output texture
 	renderTargets.push_back(rendered);
 	mat1.TextureLayer[0].Texture = rendered;
 
@@ -92,10 +154,12 @@ void RenderingCorePlain::upscale()
 
 void RenderingCorePlain::drawAll()
 {
+	// Draw the actual frame without HUD
 	//~ driver->setRenderTarget(renderTargets, true, true, skycolor);
 	driver->setRenderTarget(rendered, true, true, skycolor);
 	draw3D();
 
+	// Do the downscaling
 	driver->setRenderTarget(nullptr, false, false, skycolor);
 	static const video::S3DVertex vertices[4] = {
 			video::S3DVertex(1.0, -1.0, 0.0, 0.0, 0.0, -1.0,
@@ -111,8 +175,12 @@ void RenderingCorePlain::drawAll()
 	driver->setMaterial(mat1);
 	driver->drawVertexPrimitiveList(&vertices, 4, &indices, 2);
 
-
+	// Draw HUD etc.
 	drawPostFx();
 	//~ upscale();
 	drawHUD();
 }
+
+
+
+

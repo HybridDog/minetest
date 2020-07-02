@@ -38,4 +38,5 @@ protected:
 public:
 	RenderingCorePlain(IrrlichtDevice *_device, Client *_client, Hud *_hud);
 	void drawAll() override;
+	v2u32 getScreensize() const { return screensize; }
 };
