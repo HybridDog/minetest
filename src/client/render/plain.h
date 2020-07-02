@@ -26,6 +26,9 @@ class RenderingCorePlain : public RenderingCore
 protected:
 	int scale = 0;
 	video::ITexture *lowres = nullptr;
+	video::ITexture *rendered = nullptr;
+	irr::core::array<irr::video::IRenderTarget> renderTargets;
+	video::SMaterial mat1;
 
 	void initTextures() override;
 	void clearTextures() override;

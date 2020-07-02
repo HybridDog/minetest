@@ -20,6 +20,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "plain.h"
 #include "settings.h"
+#include "client/client.h"
+#include "client/shader.h"
+#include "client/tile.h"
+
 
 inline u32 scaledown(u32 coef, u32 size)
 {
@@ -31,10 +35,27 @@ RenderingCorePlain::RenderingCorePlain(
 	: RenderingCore(_device, _client, _hud)
 {
 	scale = g_settings->getU16("undersampling");
+
+	IWritableShaderSource *s = client->getShaderSource();
+	u32 shader = s->getShader("oversampling1", TILE_MATERIAL_BASIC, 0);
+	mat1.UseMipMaps = false;
+	mat1.MaterialType = s->getShaderInfo(shader).material;
+	mat1.TextureLayer[0].AnisotropicFilter = false;
+	mat1.TextureLayer[0].BilinearFilter = false;
+	mat1.TextureLayer[0].TrilinearFilter = false;
+	mat1.TextureLayer[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+	mat1.TextureLayer[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 }
 
 void RenderingCorePlain::initTextures()
 {
+	v2u32 render_size = screensize * 2;
+	rendered = driver->addRenderTargetTexture(render_size, "3d_render",
+		//~ video::ECF_A8R8G8B8);
+		video::ECF_A16B16G16R16F);
+	renderTargets.push_back(rendered);
+	mat1.TextureLayer[0].Texture = rendered;
+
 	if (scale <= 1)
 		return;
 	v2u32 size{scaledown(scale, screensize.X), scaledown(scale, screensize.Y)};
@@ -44,6 +65,8 @@ void RenderingCorePlain::initTextures()
 
 void RenderingCorePlain::clearTextures()
 {
+	driver->removeTexture(rendered);
+
 	if (scale <= 1)
 		return;
 	driver->removeTexture(lowres);
@@ -69,8 +92,27 @@ void RenderingCorePlain::upscale()
 
 void RenderingCorePlain::drawAll()
 {
+	//~ driver->setRenderTarget(renderTargets, true, true, skycolor);
+	driver->setRenderTarget(rendered, true, true, skycolor);
 	draw3D();
+
+	driver->setRenderTarget(nullptr, false, false, skycolor);
+	static const video::S3DVertex vertices[4] = {
+			video::S3DVertex(1.0, -1.0, 0.0, 0.0, 0.0, -1.0,
+					video::SColor(255, 0, 255, 255), 1.0, 0.0),
+			video::S3DVertex(-1.0, -1.0, 0.0, 0.0, 0.0, -1.0,
+					video::SColor(255, 255, 0, 255), 0.0, 0.0),
+			video::S3DVertex(-1.0, 1.0, 0.0, 0.0, 0.0, -1.0,
+					video::SColor(255, 255, 255, 0), 0.0, 1.0),
+			video::S3DVertex(1.0, 1.0, 0.0, 0.0, 0.0, -1.0,
+					video::SColor(255, 255, 255, 255), 1.0, 1.0),
+	};
+	static const u16 indices[6] = {0, 1, 2, 2, 3, 0};
+	driver->setMaterial(mat1);
+	driver->drawVertexPrimitiveList(&vertices, 4, &indices, 2);
+
+
 	drawPostFx();
-	upscale();
+	//~ upscale();
 	drawHUD();
 }
