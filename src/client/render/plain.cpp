@@ -21,7 +21,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "plain.h"
 #include "settings.h"
 #include "client/client.h"
-#include "client/shader.h"
 #include "client/tile.h"
 
 
@@ -98,26 +97,51 @@ RenderingCorePlain::RenderingCorePlain(
 		OversampleShaderConstantSetterFactory(this));
 
 	u32 shader = s->getShader("oversampling1", TILE_MATERIAL_BASIC, 0);
+	prepareMaterial(s, shader, 2, mat1);
+	prepareMaterial(s, shader, 2, mat2);
+	// TODO: hat 3 zwei eingangstexturen?
+	prepareMaterial(s, shader, 2, mat3);
+}
+
+void RenderingCorePlain::prepareMaterial(IWritableShaderSource *s, int shader,
+	int n, video::SMaterial &mat)
+{
 	// The material has the texture inputs for the oversampling shader
-	mat1.UseMipMaps = false;
-	mat1.MaterialType = s->getShaderInfo(shader).material;
-	mat1.TextureLayer[0].AnisotropicFilter = false;
-	mat1.TextureLayer[0].BilinearFilter = false;
-	mat1.TextureLayer[0].TrilinearFilter = false;
-	mat1.TextureLayer[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
-	mat1.TextureLayer[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+	mat.UseMipMaps = false;
+	mat.MaterialType = s->getShaderInfo(shader).material;
+	for (int k = 0; k < n; ++k) {
+		mat.TextureLayer[k].AnisotropicFilter = false;
+		mat.TextureLayer[k].BilinearFilter = false;
+		mat.TextureLayer[k].TrilinearFilter = false;
+		mat.TextureLayer[k].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+		mat.TextureLayer[k].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+	}
 }
 
 void RenderingCorePlain::initTextures()
 {
 	v2u32 render_size = screensize * 2;
-	rendered = driver->addRenderTargetTexture(render_size, "3d_render",
-		//~ video::ECF_A8R8G8B8);
+	texture_rendered = driver->addRenderTargetTexture(render_size, "3d_render",
 		video::ECF_A16B16G16R16F);
-	// The rendertargets are required when rendering to more than just a single
-	// output texture
-	renderTargets.push_back(rendered);
-	mat1.TextureLayer[0].Texture = rendered;
+		//~ video::ECF_A8R8G8B8);
+	mat1.TextureLayer[0].Texture = texture_rendered;
+
+	texture_l = driver->addRenderTargetTexture(screensize, "linear_downscaled",
+		video::ECF_A16B16G16R16F);
+	texture_l2 = driver->addRenderTargetTexture(screensize,
+		"squared_linear_down", video::ECF_A16B16G16R16F);
+	renderTargets1.push_back(texture_l);
+	renderTargets1.push_back(texture_l2);
+	mat2.TextureLayer[0].Texture = texture_l;
+	mat2.TextureLayer[1].Texture = texture_l2;
+
+	texture_m = driver->addRenderTargetTexture(screensize,
+		"data_m", video::ECF_A16B16G16R16F);
+	texture_r = driver->addRenderTargetTexture(screensize,
+		"data_r", video::ECF_A16B16G16R16F);
+	mat3.TextureLayer[0].Texture = texture_m;
+	mat3.TextureLayer[1].Texture = texture_r;
+
 
 	if (scale <= 1)
 		return;
@@ -128,7 +152,11 @@ void RenderingCorePlain::initTextures()
 
 void RenderingCorePlain::clearTextures()
 {
-	driver->removeTexture(rendered);
+	driver->removeTexture(texture_rendered);
+	driver->removeTexture(texture_l);
+	driver->removeTexture(texture_l2);
+	driver->removeTexture(texture_m);
+	driver->removeTexture(texture_r);
 
 	if (scale <= 1)
 		return;
@@ -153,15 +181,8 @@ void RenderingCorePlain::upscale()
 			core::rect<s32>(0, 0, size.X, size.Y));
 }
 
-void RenderingCorePlain::drawAll()
+void RenderingCorePlain::drawImage(video::SMaterial &mat)
 {
-	// Draw the actual frame without HUD
-	//~ driver->setRenderTarget(renderTargets, true, true, skycolor);
-	driver->setRenderTarget(rendered, true, true, skycolor);
-	draw3D();
-
-	// Do the downscaling
-	driver->setRenderTarget(nullptr, false, false, skycolor);
 	static const video::S3DVertex vertices[4] = {
 			video::S3DVertex(1.0, -1.0, 0.0, 0.0, 0.0, -1.0,
 					video::SColor(255, 0, 255, 255), 1.0, 0.0),
@@ -173,8 +194,21 @@ void RenderingCorePlain::drawAll()
 					video::SColor(255, 255, 255, 255), 1.0, 1.0),
 	};
 	static const u16 indices[6] = {0, 1, 2, 2, 3, 0};
-	driver->setMaterial(mat1);
+	driver->setMaterial(mat);
 	driver->drawVertexPrimitiveList(&vertices, 4, &indices, 2);
+}
+
+void RenderingCorePlain::drawAll()
+{
+	// Draw the actual frame without HUD
+	driver->setRenderTarget(texture_rendered, true, true, skycolor);
+	draw3D();
+
+	// Do the downscaling
+	driver->setRenderTarget(nullptr, false, false, skycolor);
+	drawImage(mat1);
+
+
 
 	// Draw HUD etc.
 	drawPostFx();
