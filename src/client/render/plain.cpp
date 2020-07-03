@@ -25,6 +25,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/tile.h"
 
 
+#include <stdio.h>
+
 
 // With the IShaderConstantSetter, uniforms of the shader can be set (probably)
 class OversampleShaderConstantSetter : public IShaderConstantSetter
@@ -32,7 +34,7 @@ class OversampleShaderConstantSetter : public IShaderConstantSetter
 public:
 	OversampleShaderConstantSetter(RenderingCorePlain *core):
 		m_core(core),
-		m_resolution("resolution")
+		m_pixlen("u_base_pixlen")
 	{}
 
 	~OversampleShaderConstantSetter() override = default;
@@ -43,14 +45,12 @@ public:
 		if (!is_highlevel)
 			return;
 
-		// TODO: Why is the resolution uniform never set?
-
-		v2u32 render_size = m_core->getScreensize();
+		v2u32 render_size = m_core->getScreensize() * 2;
 		float as_array[2] = {
-			(float)render_size.X,
-			(float)render_size.Y,
+			1.0f / (float)render_size.X,
+			1.0f / (float)render_size.Y,
 		};
-		m_resolution.set(as_array, services);
+		m_pixlen.set(as_array, services);
 	}
 
 	//~ void onSetMaterial(const video::SMaterial& material) override
@@ -60,7 +60,7 @@ public:
 
 private:
 	RenderingCorePlain *m_core;
-	CachedPixelShaderSetting<float, 2> m_resolution;
+	CachedPixelShaderSetting<float, 2> m_pixlen;
 };
 
 // Each shader requires a constant setter and a factory for it
@@ -91,7 +91,12 @@ RenderingCorePlain::RenderingCorePlain(
 {
 	scale = g_settings->getU16("undersampling");
 
+
 	IWritableShaderSource *s = client->getShaderSource();
+	// The factory must be added before the getShader call.
+	s->addShaderConstantSetterFactory(new
+		OversampleShaderConstantSetterFactory(this));
+
 	u32 shader = s->getShader("oversampling1", TILE_MATERIAL_BASIC, 0);
 	// The material has the texture inputs for the oversampling shader
 	mat1.UseMipMaps = false;
@@ -101,10 +106,6 @@ RenderingCorePlain::RenderingCorePlain(
 	mat1.TextureLayer[0].TrilinearFilter = false;
 	mat1.TextureLayer[0].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
 	mat1.TextureLayer[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
-
-	s->addShaderConstantSetterFactory(new
-		OversampleShaderConstantSetterFactory(this));
-
 }
 
 void RenderingCorePlain::initTextures()
