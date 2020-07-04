@@ -38,6 +38,12 @@ void main()
 	}
 	acc_d = acc_d * patch_sz_div;
 
+	// Use linear downscaled values for the colours; otherwise it looks
+	// wrong
+	// TODO: why does the colour version not work nicely with shaders but
+	// it works with an implemention on the CPU?
+	acc_d.gb = col_l.gb;
+
 	// Go back to sRGB colours
 	gl_FragColor = vec4(ycbcr_to_srgb(acc_d), 1.0);
 }
