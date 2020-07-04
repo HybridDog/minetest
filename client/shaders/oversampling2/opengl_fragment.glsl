@@ -1,6 +1,10 @@
-uniform sampler2D input_l;
-uniform sampler2D input_l2;
+uniform sampler2D baseTexture;
+uniform sampler2D normalTexture;
+
 uniform vec2 size_divisor;
+
+#define input_l baseTexture
+#define input_l2 normalTexture
 
 float patch_sz_div = 0.25f;
 

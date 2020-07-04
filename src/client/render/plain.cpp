@@ -28,15 +28,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 
 // With the IShaderConstantSetter, uniforms of the shader can be set (probably)
-class OversampleShaderConstantSetter : public IShaderConstantSetter
+class Oversample1ShaderConstantSetter : public IShaderConstantSetter
 {
 public:
-	OversampleShaderConstantSetter(RenderingCorePlain *core):
+	Oversample1ShaderConstantSetter(RenderingCorePlain *core):
 		m_core(core),
 		m_pixlen("u_base_pixlen")
 	{}
 
-	~OversampleShaderConstantSetter() override = default;
+	~Oversample1ShaderConstantSetter() override = default;
 
 	void onSetConstants(video::IMaterialRendererServices *services,
 			bool is_highlevel) override
@@ -63,17 +63,60 @@ private:
 };
 
 // Each shader requires a constant setter and a factory for it
-class OversampleShaderConstantSetterFactory : public IShaderConstantSetterFactory
+class Oversample1ShaderConstantSetterFactory : public IShaderConstantSetterFactory
 {
 	RenderingCorePlain *m_core;
 public:
-	OversampleShaderConstantSetterFactory(RenderingCorePlain *core):
+	Oversample1ShaderConstantSetterFactory(RenderingCorePlain *core):
 		m_core(core)
 	{}
 
 	virtual IShaderConstantSetter* create()
 	{
-		return new OversampleShaderConstantSetter(m_core);
+		return new Oversample1ShaderConstantSetter(m_core);
+	}
+};
+
+class Oversample2ShaderConstantSetter : public IShaderConstantSetter
+{
+public:
+	Oversample2ShaderConstantSetter(RenderingCorePlain *core):
+		m_core(core),
+		m_size_divisor("size_divisor")
+	{}
+
+	~Oversample2ShaderConstantSetter() override = default;
+
+	void onSetConstants(video::IMaterialRendererServices *services,
+			bool is_highlevel) override
+	{
+		if (!is_highlevel)
+			return;
+
+		v2u32 size = m_core->getScreensize();
+		float as_array[2] = {
+			1.0f / (float)size.X,
+			1.0f / (float)size.Y,
+		};
+		m_size_divisor.set(as_array, services);
+	}
+
+private:
+	RenderingCorePlain *m_core;
+	CachedPixelShaderSetting<float, 2> m_size_divisor;
+};
+
+class Oversample2ShaderConstantSetterFactory : public IShaderConstantSetterFactory
+{
+	RenderingCorePlain *m_core;
+public:
+	Oversample2ShaderConstantSetterFactory(RenderingCorePlain *core):
+		m_core(core)
+	{}
+
+	virtual IShaderConstantSetter* create()
+	{
+		return new Oversample2ShaderConstantSetter(m_core);
 	}
 };
 
@@ -92,15 +135,18 @@ RenderingCorePlain::RenderingCorePlain(
 
 
 	IWritableShaderSource *s = client->getShaderSource();
-	// The factory must be added before the getShader call.
+	// The factories must be added before the getShader calls.
 	s->addShaderConstantSetterFactory(new
-		OversampleShaderConstantSetterFactory(this));
+		Oversample1ShaderConstantSetterFactory(this));
+	s->addShaderConstantSetterFactory(new
+		Oversample2ShaderConstantSetterFactory(this));
 
 	u32 shader = s->getShader("oversampling1", TILE_MATERIAL_BASIC, 0);
 	prepareMaterial(s, shader, 2, mat1);
+	shader = s->getShader("oversampling2", TILE_MATERIAL_BASIC, 0);
 	prepareMaterial(s, shader, 2, mat2);
-	// TODO: hat 3 zwei eingangstexturen?
-	prepareMaterial(s, shader, 2, mat3);
+	shader = s->getShader("oversampling3", TILE_MATERIAL_BASIC, 0);
+	prepareMaterial(s, shader, 3, mat3);
 }
 
 void RenderingCorePlain::prepareMaterial(IWritableShaderSource *s, int shader,
@@ -130,8 +176,8 @@ void RenderingCorePlain::initTextures()
 		video::ECF_A16B16G16R16F);
 	texture_l2 = driver->addRenderTargetTexture(screensize,
 		"squared_linear_down", video::ECF_A16B16G16R16F);
-	renderTargets1.push_back(texture_l);
-	renderTargets1.push_back(texture_l2);
+	render_targets_1.push_back(texture_l);
+	render_targets_1.push_back(texture_l2);
 	mat2.TextureLayer[0].Texture = texture_l;
 	mat2.TextureLayer[1].Texture = texture_l2;
 
@@ -139,8 +185,11 @@ void RenderingCorePlain::initTextures()
 		"data_m", video::ECF_A16B16G16R16F);
 	texture_r = driver->addRenderTargetTexture(screensize,
 		"data_r", video::ECF_A16B16G16R16F);
-	mat3.TextureLayer[0].Texture = texture_m;
-	mat3.TextureLayer[1].Texture = texture_r;
+	render_targets_2.push_back(texture_m);
+	render_targets_2.push_back(texture_r);
+	mat3.TextureLayer[0].Texture = texture_l;
+	mat3.TextureLayer[1].Texture = texture_m;
+	mat3.TextureLayer[2].Texture = texture_r;
 
 
 	if (scale <= 1)
@@ -157,6 +206,8 @@ void RenderingCorePlain::clearTextures()
 	driver->removeTexture(texture_l2);
 	driver->removeTexture(texture_m);
 	driver->removeTexture(texture_r);
+	render_targets_1.clear();
+	render_targets_2.clear();
 
 	if (scale <= 1)
 		return;
@@ -205,10 +256,12 @@ void RenderingCorePlain::drawAll()
 	draw3D();
 
 	// Do the downscaling
-	driver->setRenderTarget(nullptr, false, false, skycolor);
+	driver->setRenderTarget(render_targets_1, true, true, skycolor);
 	drawImage(mat1);
-
-
+	driver->setRenderTarget(render_targets_2, true, true, skycolor);
+	drawImage(mat2);
+	driver->setRenderTarget(nullptr, false, false, skycolor);
+	drawImage(mat3);
 
 	// Draw HUD etc.
 	drawPostFx();

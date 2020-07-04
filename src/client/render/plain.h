@@ -33,11 +33,11 @@ protected:
 	video::ITexture *texture_l2 = nullptr;
 	// The rendertargets are required when rendering to more than just a single
 	// output texture
-	irr::core::array<irr::video::IRenderTarget> renderTargets1;
+	irr::core::array<irr::video::IRenderTarget> render_targets_1;
 	video::SMaterial mat2;
 	video::ITexture *texture_m = nullptr;
 	video::ITexture *texture_r = nullptr;
-	irr::core::array<irr::video::IRenderTarget> renderTargets2;
+	irr::core::array<irr::video::IRenderTarget> render_targets_2;
 	video::SMaterial mat3;
 
 	void initTextures() override;
