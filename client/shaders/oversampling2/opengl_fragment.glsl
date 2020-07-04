@@ -37,7 +37,7 @@ void main()
 		if (slv[i] >= 0.0005f)
 			rv[i] = sqrt(shv[i] / slv[i]);
 		else
-			rv[i] = 0;
+			rv[i] = 2;
 	}
 
 	gl_FragData[0] = vec4(mv, 1.0);
