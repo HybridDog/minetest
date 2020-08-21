@@ -55,7 +55,7 @@ vec4 applyToneMapping(vec4 color)
 	const float gamma = 1.6;
 	const float exposureBias = 5.5;
 	color.rgb = uncharted2Tonemap(exposureBias * color.rgb);
-	// Precalculated white_scale from 
+	// Precalculated white_scale from
 	//vec3 whiteScale = 1.0 / uncharted2Tonemap(vec3(W));
 	vec3 whiteScale = vec3(1.036015346);
 	color.rgb *= whiteScale;
@@ -127,6 +127,44 @@ float find_intersectionRGB(vec2 dp, vec2 ds)
 	}
 	return depth;
 }
+
+
+// https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
+#define saturate(v) clamp(v, 0, 1)
+
+vec3 hue_to_rgb(float hue)
+{
+    float R = abs(hue * 6 - 3) - 1;
+    float G = 2 - abs(hue * 6 - 2);
+    float B = 2 - abs(hue * 6 - 4);
+    return saturate(vec3(R,G,B));
+}
+
+const float HCV_EPSILON = 1e-10;
+
+vec3 rgb_to_hcv(vec3 rgb)
+{
+    // Based on work by Sam Hocevar and Emil Persson
+    vec4 P = (rgb.g < rgb.b) ? vec4(rgb.bg, -1.0, 2.0/3.0) : vec4(rgb.gb, 0.0, -1.0/3.0);
+    vec4 Q = (rgb.r < P.x) ? vec4(P.xyw, rgb.r) : vec4(rgb.r, P.yzx);
+    float C = Q.x - min(Q.w, Q.y);
+    float H = abs((Q.w - Q.y) / (6 * C + HCV_EPSILON) + Q.z);
+    return vec3(H, C, Q.x);
+}
+
+vec3 rgb_to_hsv(vec3 rgb)
+{
+    vec3 HCV = rgb_to_hcv(rgb);
+    float S = HCV.y / (HCV.z + HCV_EPSILON);
+    return vec3(HCV.x, S, HCV.z);
+}
+
+vec3 hsv_to_rgb(vec3 hsv)
+{
+    vec3 rgb = hue_to_rgb(hsv.x);
+    return ((rgb - 1.0) * hsv.y + 1.0) * hsv.z;
+}
+
 
 void main(void)
 {
@@ -204,11 +242,19 @@ void main(void)
 	color = base.rgb;
 #endif
 
-	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0); 
-	
+	vec4 col = vec4(color.rgb * gl_Color.rgb, 1.0);
+
 #ifdef ENABLE_TONE_MAPPING
 	col = applyToneMapping(col);
 #endif
+
+	vec3 hsv = rgb_to_hsv(col.rgb);
+	float depth = gl_FragCoord.z / gl_FragCoord.w;
+	hsv.x = sin(200.0 * inversesqrt(depth) + sin(gl_FragCoord.x * 0.01) + sin(gl_FragCoord.y * 0.005)) * 0.5 + 0.5;
+	hsv.y = 1.0;
+	hsv.z *= 2.0;
+	col.rgb = hsv_to_rgb(hsv);
+
 
 	// Due to a bug in some (older ?) graphics stacks (possibly in the glsl compiler ?),
 	// the fog will only be rendered correctly if the last operation before the
