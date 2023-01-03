@@ -26,6 +26,12 @@ fi
 toolchain_file=$topdir/toolchain_${compiler/-gcc/}.cmake
 echo "Using $toolchain_file"
 
+# Use ccache if it is available
+if command -v ccache >&-; then
+	extra_args=(-DCMAKE_C_COMPILER_LAUNCHER=ccache \
+		-DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
+fi
+
 find_runtime_dlls x86_64-w64-mingw32
 
 # Get stuff
@@ -57,6 +63,7 @@ cd $sourcedir
 [ -d build ] && rm -rf build
 
 cmake_args=(
+	"${extra_args[@]}"
 	-DCMAKE_TOOLCHAIN_FILE=$toolchain_file
 	-DCMAKE_INSTALL_PREFIX=/tmp
 	-DVERSION_EXTRA=$git_hash

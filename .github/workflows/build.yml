@@ -38,6 +38,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -59,6 +63,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -80,6 +88,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -105,6 +117,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -131,6 +147,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -167,6 +187,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install compiler
         run: |
           sudo apt-get update && sudo apt-get install -y gettext
@@ -185,6 +209,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}
       - name: Install compiler
         run: |
           sudo apt-get update && sudo apt-get install -y gettext
@@ -226,6 +254,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ github.job }}-${{ matrix.config.arch }}
 
       - name: Checkout IrrlichtMt
         run: |
@@ -244,6 +276,8 @@ jobs:
       - name: Minetest CMake
         run: |
           cmake ${{matrix.config.generator}}  `
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache  `
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  `
           -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"  `
           -DCMAKE_BUILD_TYPE=Release  `
           -DENABLE_POSTGRESQL=OFF  `
