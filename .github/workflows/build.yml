@@ -254,10 +254,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ github.job }}-${{ matrix.config.arch }}
 
       - name: Checkout IrrlichtMt
         run: |
@@ -275,7 +271,7 @@ jobs:
 
       - name: Minetest CMake
         run: |
-          cmake ${{matrix.config.generator}} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  `
+          cmake ${{matrix.config.generator}}  `
           -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake"  `
           -DCMAKE_BUILD_TYPE=Release  `
           -DENABLE_POSTGRESQL=OFF  `

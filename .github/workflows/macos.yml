@@ -31,10 +31,6 @@ jobs:
     runs-on: macos-11
     steps:
       - uses: actions/checkout@v3
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: macos
       - name: Install deps
         run: |
           source ./util/ci/common.sh
@@ -42,7 +38,6 @@ jobs:
 
       - name: Build
         run: |
-          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           git clone -b $MINETEST_GAME_BRANCH $MINETEST_GAME_REPO games/$MINETEST_GAME_NAME
           git clone https://github.com/minetest/irrlicht lib/irrlichtmt --depth 1 -b $(cat misc/irrlichtmt_tag.txt)
           mkdir build
