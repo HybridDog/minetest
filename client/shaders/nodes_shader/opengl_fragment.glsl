@@ -20,7 +20,7 @@ uniform float animationTimer;
 	uniform vec4 CameraPos;
 	uniform float xyPerspectiveBias0;
 	uniform float xyPerspectiveBias1;
-	
+
 	varying float adj_shadow_strength;
 	varying float cosLight;
 	varying float f_normal_length;
@@ -428,6 +428,26 @@ void main(void)
 			shadow_color = mix(vec3(0.0), shadow_color, min(cosLight, self_shadow_cutoff_cosine)/self_shadow_cutoff_cosine);
 		}
 
+		// Get the Y component of base.rgb converted to YCbCr as an approximate
+		// brightness of the albedo
+		float albedo_y = dot(base.rgb, vec3(0.299, 0.587, 0.114));
+		// There are no specular map textures, so approximate the shininess
+		// and specular reflections strength with albedo_y
+		//~ float shininess = 16.0;
+		float shininess = 8.0 + 64.0 * pow(1.0 - albedo_y, 2.0);
+		float specular_visibility = pow(albedo_y, 3.0);
+		//~ float specular_visibility = 1.0;
+		// view_dir: Vector from the fragment to the eye in world space.
+		// (eyeVec is view_dir in view space, but v_LightDirection is in
+		// world space)
+		vec3 view_dir = normalize((eyePosition - cameraOffset) - worldPosition);
+		vec3 halfway = normalize(normalize(view_dir) + normalize(-v_LightDirection));
+		specular_visibility *= 1.0 - shadow_int;  // darken in shadows
+		// Calculate specular reflections with the Blinn-Phong model
+		float spec = specular_visibility * pow(max(dot(vNormal, halfway), 0.0), shininess);
+		// Colour (and intensity) of the sun/moon light
+		vec3 light_colour = vec3(1.0);
+
 		shadow_int *= f_adj_shadow_strength;
 
 		// calculate fragment color from components:
@@ -435,6 +455,7 @@ void main(void)
 				adjusted_night_ratio * col.rgb + // artificial light
 				(1.0 - adjusted_night_ratio) * ( // natural light
 						col.rgb * (1.0 - shadow_int * (1.0 - shadow_color)) +  // filtered texture color
+						light_colour * spec +  // Specular reflection of the sun/moon
 						dayLight * shadow_color * shadow_int);                 // reflected filtered sunlight/moonlight
 	}
 #endif

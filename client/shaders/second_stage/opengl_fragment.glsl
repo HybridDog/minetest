@@ -75,6 +75,34 @@ vec3 applySaturation(vec3 color, float factor)
 }
 #endif
 
+// Conversion functions from
+// https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
+// RGB to YCbCr, ranges [0, 1]
+vec3 rgb_to_ycbcr(vec3 rgb) {
+    float y = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+    float cb = (rgb.b - y) * 0.565;
+    float cr = (rgb.r - y) * 0.713;
+
+    return vec3(y, cb, cr);
+}
+// YCbCr to RGB
+vec3 ycbcr_to_rgb(vec3 yuv) {
+    return vec3(
+        yuv.x + 1.403 * yuv.z,
+        yuv.x - 0.344 * yuv.y - 0.714 * yuv.z,
+        yuv.x + 1.770 * yuv.y
+    );
+}
+
+// Clamp the saturation in YCbCr before a clamp in RGB for a better chroma
+// preservation
+vec3 clamp_saturation(vec3 color)
+{
+	vec3 yuv = rgb_to_ycbcr(color.rgb);
+	yuv.yz = clamp(yuv.yz, vec2(-0.5), vec2(0.5));
+	return ycbcr_to_rgb(yuv);
+}
+
 void main(void)
 {
 	vec2 uv = varTexCoord.st;
@@ -105,7 +133,8 @@ void main(void)
 #endif
 	}
 
-	color.rgb = clamp(color.rgb, vec3(0.), vec3(1.));
+	color.rgb = clamp_saturation(color.rgb);
+    color.rgb = clamp(color.rgb, vec3(0.), vec3(1.));
 
 	// return to sRGB colorspace (approximate)
 	color.rgb = pow(color.rgb, vec3(1.0 / 2.2));
