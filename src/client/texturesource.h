@@ -16,6 +16,7 @@ namespace irr::video
 }
 
 typedef std::vector<video::SColor> Palette;
+class TextureStochastic;
 
 /*
 	TextureSource creates and caches textures.
@@ -39,13 +40,15 @@ public:
 
 	virtual ~ITextureSource() = default;
 
-	virtual u32 getTextureId(const std::string &name)=0;
+	virtual u32 getTextureId(const std::string &name, bool stochastic) = 0;
 	virtual std::string getTextureName(u32 id)=0;
 	virtual video::ITexture* getTexture(u32 id)=0;
 	virtual video::ITexture* getTexture(
 			const std::string &name, u32 *id = nullptr)=0;
 	virtual video::ITexture* getTextureForMesh(
 			const std::string &name, u32 *id = nullptr) = 0;
+	virtual TextureStochastic *getTextureForMeshStochastic(
+		const std::string &name, u32 &id) = 0;
 	/*!
 	 * Returns a palette from the given texture name.
 	 * The pointer is valid until the texture source is
@@ -65,7 +68,7 @@ public:
 
 	virtual ~IWritableTextureSource() = default;
 
-	virtual u32 getTextureId(const std::string &name)=0;
+	virtual u32 getTextureId(const std::string &name, bool stochastic) = 0;
 	virtual std::string getTextureName(u32 id)=0;
 	virtual video::ITexture* getTexture(u32 id)=0;
 	virtual video::ITexture* getTexture(

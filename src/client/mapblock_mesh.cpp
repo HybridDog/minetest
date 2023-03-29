@@ -17,6 +17,7 @@
 #include "util/tracy_wrapper.h"
 #include "client/meshgen/collector.h"
 #include "client/renderingengine.h"
+#include "client/texture_stochastic.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -670,6 +671,7 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 				m_crack_materials.insert(std::make_pair(
 						std::pair<u8, u32>(layer, i), os.str()));
 				// Replace tile texture with the cracked one
+				// TODO: stochastic texture sampling with crack
 				p.layer.texture = m_tsrc->getTextureForMesh(
 						os.str() + "0",
 						&p.layer.texture_id);
@@ -698,7 +700,15 @@ MapBlockMesh::MapBlockMesh(Client *client, MeshMakeData *data, v3s16 camera_offs
 			video::SMaterial material;
 			material.BackfaceCulling = true;
 			material.FogEnable = true;
-			material.setTexture(0, p.layer.texture);
+			if (p.layer.texture_stochastic != nullptr) {
+				material.setTexture(0,
+					p.layer.texture_stochastic->getGaussianizedTexture());
+				material.setTexture(1,
+					p.layer.texture_stochastic->getLUTTexture());
+				material.TextureStochasticPtr = p.layer.texture_stochastic;
+			} else {
+				material.setTexture(0, p.layer.texture);
+			}
 			material.forEachTexture([] (auto &tex) {
 				tex.MinFilter = video::ETMINF_NEAREST_MIPMAP_NEAREST;
 				tex.MagFilter = video::ETMAGF_NEAREST;
@@ -780,6 +790,7 @@ bool MapBlockMesh::animate(bool faraway, float time, int crack,
 			// Create new texture name from original
 			std::string s = crack_material.second + itos(crack);
 			u32 new_texture_id = 0;
+			// TODO: stochastic texture sampling with crack
 			video::ITexture *new_texture =
 					m_tsrc->getTextureForMesh(s, &new_texture_id);
 			buf->getMaterial().setTexture(0, new_texture);

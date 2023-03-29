@@ -9,6 +9,8 @@
 #include <vector>
 #include <SMaterial.h>
 
+class TextureStochastic;
+
 enum MaterialType{
 	TILE_MATERIAL_BASIC,
 	TILE_MATERIAL_ALPHA,
@@ -96,6 +98,8 @@ struct TileLayer
 	// Ordered for size, please do not reorder
 
 	video::ITexture *texture = nullptr;
+	// Data for stochastic texture sampling
+	TextureStochastic *texture_stochastic = nullptr;
 
 	u32 shader_id = 0;
 

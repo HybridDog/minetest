@@ -12,6 +12,8 @@
 #include "SMaterialLayer.h"
 #include "IrrCompileConfig.h" // for IRRLICHT_API
 
+class TextureStochastic;
+
 namespace irr
 {
 namespace video
@@ -259,6 +261,9 @@ public:
 	//! Custom color parameter, can be used by custom shader materials.
 	// See MainShaderConstantSetter in Luanti.
 	SColor ColorParam;
+
+	//! Pointer for stochastic texture sampling
+	TextureStochastic *TextureStochasticPtr = nullptr;
 
 	//! Free parameter, dependent on the material type.
 	/** Mostly ignored, used for example in

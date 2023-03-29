@@ -48,4 +48,8 @@ void TileLayer::applyMaterialOptionsWithShaders(video::SMaterial &material) cons
 		material.TextureLayers[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 		material.TextureLayers[1].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 	}
+	// TODO: What is this? Why are there material.TextureLayers[1] changes above?
+	material.TextureLayers[1].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+	material.TextureLayers[1].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+	//~ material.TextureLayers[1].BilinearFilter = true;
 }

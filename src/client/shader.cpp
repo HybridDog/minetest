@@ -3,6 +3,7 @@
 // Copyright (C) 2013 celeron55, Perttu Ahola <celeron55@gmail.com>
 // Copyright (C) 2013 Kahrl <kahrl@gmx.net>
 
+#include <array>
 #include <fstream>
 #include <iterator>
 #include "shader.h"
@@ -653,6 +654,10 @@ ShaderInfo ShaderSource::generateShader(const std::string &name,
 	PROVIDE(TILE_MATERIAL_PLAIN_ALPHA);
 
 #undef PROVIDE
+
+	// TODO
+	bool stochastic{true};
+	shaders_header << "#define STOCHASTIC_TEXTURE_SAMPLING " << stochastic << "\n";
 
 	shaders_header << "#define MATERIAL_TYPE " << (int)material_type << "\n";
 	shaders_header << "#define DRAW_TYPE " << (int)drawtype << "\n";

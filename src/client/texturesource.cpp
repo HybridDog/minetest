@@ -10,6 +10,7 @@
 #include "imagesource.h"
 #include "renderingengine.h"
 #include "settings.h"
+#include "texture_stochastic.hpp"
 #include "texturepaths.h"
 #include "util/thread.h"
 
@@ -19,6 +20,8 @@ struct TextureInfo
 {
 	std::string name;
 	video::ITexture *texture = nullptr;
+	// Data for stochastic texture sampling
+	TextureStochastic *texture_stochastic = nullptr;
 
 	// Stores source image names which ImageSource::generateImage used.
 	std::set<std::string> sourceImages{};
@@ -68,9 +71,11 @@ public:
 		- if main thread, generates the texture, adds to cache and returns id.
 		- if other thread, adds to request queue and waits for main thread.
 
+		`stochastic` is true iff the texture is used in conjunction with
+		stochastic texture sampling.
 		The id 0 points to a NULL texture. It is returned in case of error.
 	*/
-	u32 getTextureId(const std::string &name);
+	u32 getTextureId(const std::string &name, bool stochastic);
 
 	// Finds out the name of a cached texture.
 	std::string getTextureName(u32 id);
@@ -94,6 +99,8 @@ public:
 		have had additional filters applied.
 	*/
 	video::ITexture* getTextureForMesh(const std::string &name, u32 *id);
+	virtual TextureStochastic *getTextureForMeshStochastic(
+		const std::string &name, u32 &id) override;
 
 	virtual Palette* getPalette(const std::string &name);
 
@@ -139,7 +146,7 @@ private:
 	void rebuildTexture(video::IVideoDriver *driver, TextureInfo &ti);
 
 	// Generate a texture
-	u32 generateTexture(const std::string &name);
+	u32 generateTexture(const std::string &name, bool stochastic);
 
 	// Thread-safe cache of what source images are known (true = known)
 	MutexedMap<std::string, bool> m_source_image_existence;
@@ -147,13 +154,15 @@ private:
 	// A texture id is index in this array.
 	// The first position contains a NULL texture.
 	std::vector<TextureInfo> m_textureinfo_cache;
-	// Maps a texture name to an index in the former.
+	// Maps a texture name to an index in m_textureinfo_cache.
 	std::map<std::string, u32> m_name_to_id;
-	// The two former containers are behind this mutex
+	// Analogon for preprocessed stochastic texture sampling textures
+	std::map<std::string, u32> m_name_to_id_stochastic;
+	// The former containers are behind this mutex
 	std::mutex m_textureinfo_cache_mutex;
 
 	// Queued texture fetches (to be processed by the main thread)
-	RequestQueue<std::string, u32, std::thread::id, u8> m_get_texture_queue;
+	RequestQueue<std::pair<std::string, bool>, u32, std::thread::id, u8> m_get_texture_queue;
 
 	// Textures that have been overwritten with other ones
 	// but can't be deleted because the ITexture* might still be used
@@ -178,6 +187,7 @@ TextureSource::TextureSource()
 	// Add a NULL TextureInfo as the first index, named ""
 	m_textureinfo_cache.emplace_back(TextureInfo{""});
 	m_name_to_id[""] = 0;
+	m_name_to_id_stochastic[""] = 0;
 
 	// Cache some settings
 	// Note: Since this is only done once, the game must be restarted
@@ -211,36 +221,44 @@ TextureSource::~TextureSource()
 			<< " after: " << driver->getTextureCount() << std::endl;
 }
 
-u32 TextureSource::getTextureId(const std::string &name)
+u32 TextureSource::getTextureId(const std::string &name, bool stochastic)
 {
 	{ // See if texture already exists
 		MutexAutoLock lock(m_textureinfo_cache_mutex);
-		auto n = m_name_to_id.find(name);
-		if (n != m_name_to_id.end())
-			return n->second;
+		std::map<std::string, u32>::iterator n;
+		if (stochastic) {
+			n = m_name_to_id_stochastic.find(name);
+			if (n != m_name_to_id_stochastic.end())
+				return n->second;
+		} else {
+			n = m_name_to_id.find(name);
+			if (n != m_name_to_id.end())
+				return n->second;
+		}
 	}
 
 	// Get texture
 	if (std::this_thread::get_id() == m_main_thread) {
-		return generateTexture(name);
+		return generateTexture(name, stochastic);
 	}
 
 
 	infostream << "getTextureId(): Queued: name=\"" << name << "\"" << std::endl;
 
 	// We're gonna ask the result to be put into here
-	static thread_local ResultQueue<std::string, u32, std::thread::id, u8> result_queue;
+	// TODO: stochastic
+	static thread_local ResultQueue<std::pair<std::string, bool>, u32, std::thread::id, u8> result_queue;
 
 	// Throw a request in
-	m_get_texture_queue.add(name, std::this_thread::get_id(), 0, &result_queue);
+	m_get_texture_queue.add(std::pair<std::string, bool>{name, stochastic}, std::this_thread::get_id(), 0, &result_queue);
 
 	try {
 		while(true) {
 			// Wait for result for up to 1 seconds (empirical value)
-			GetResult<std::string, u32, std::thread::id, u8>
+			GetResult<std::pair<std::string, bool>, u32, std::thread::id, u8>
 				result = result_queue.pop_front(1000);
 
-			if (result.key == name) {
+			if (result.key == std::pair<std::string, bool>(name, stochastic)) {
 				return result.item;
 			}
 		}
@@ -255,7 +273,7 @@ u32 TextureSource::getTextureId(const std::string &name)
 }
 
 // This method generates all the textures
-u32 TextureSource::generateTexture(const std::string &name)
+u32 TextureSource::generateTexture(const std::string &name, bool stochastic)
 {
 	// Empty name means texture 0
 	if (name.empty()) {
@@ -265,9 +283,16 @@ u32 TextureSource::generateTexture(const std::string &name)
 
 	{ // See if texture already exists
 		MutexAutoLock lock(m_textureinfo_cache_mutex);
-		auto n = m_name_to_id.find(name);
-		if (n != m_name_to_id.end())
-			return n->second;
+		std::map<std::string, u32>::iterator n;
+		if (stochastic) {
+			n = m_name_to_id_stochastic.find(name);
+			if (n != m_name_to_id_stochastic.end())
+				return n->second;
+		} else {
+			n = m_name_to_id.find(name);
+			if (n != m_name_to_id.end())
+				return n->second;
+		}
 	}
 
 	// Calling only allowed from main thread
@@ -285,13 +310,22 @@ u32 TextureSource::generateTexture(const std::string &name)
 	video::IImage *img = m_imagesource.generateImage(name, source_image_names);
 
 	video::ITexture *tex = nullptr;
+	TextureStochastic *texture_stochastic = nullptr;
 
 	if (img) {
 		img = Align2Npot2(img, driver);
-		// Create texture from resulting image
-		tex = driver->addTexture(name.c_str(), img);
-		guiScalingCache(io::path(name.c_str()), driver, img);
-		img->drop();
+		if (stochastic) {
+			// TODO: this is never freed -> leak
+			texture_stochastic = new TextureStochastic(*driver, *img, name);
+			// FIXME: Is the guiScalingCache thing needed?
+			guiScalingCache(io::path(name.c_str()), driver, img);
+			img->drop();
+		} else {
+			// Create texture from resulting image
+			tex = driver->addTexture(name.c_str(), img);
+			guiScalingCache(io::path(name.c_str()), driver, img);
+			img->drop();
+		}
 	}
 
 	// Add texture to caches (add NULL textures too)
@@ -299,9 +333,15 @@ u32 TextureSource::generateTexture(const std::string &name)
 	MutexAutoLock lock(m_textureinfo_cache_mutex);
 
 	u32 id = m_textureinfo_cache.size();
-	TextureInfo ti{name, tex, std::move(source_image_names)};
-	m_textureinfo_cache.emplace_back(std::move(ti));
-	m_name_to_id[name] = id;
+	if (stochastic) {
+		m_textureinfo_cache.emplace_back(TextureInfo{name, nullptr,
+			texture_stochastic, std::move(source_image_names)});
+		m_name_to_id_stochastic[name] = id;
+	} else {
+		m_textureinfo_cache.emplace_back(TextureInfo{name, tex, nullptr,
+			std::move(source_image_names)});
+		m_name_to_id[name] = id;
+	}
 
 	return id;
 }
@@ -332,7 +372,7 @@ video::ITexture* TextureSource::getTexture(u32 id)
 
 video::ITexture* TextureSource::getTexture(const std::string &name, u32 *id)
 {
-	u32 actual_id = getTextureId(name);
+	u32 actual_id = getTextureId(name, false);
 	if (id)
 		*id = actual_id;
 
@@ -341,11 +381,35 @@ video::ITexture* TextureSource::getTexture(const std::string &name, u32 *id)
 
 video::ITexture* TextureSource::getTextureForMesh(const std::string &name, u32 *id)
 {
+	u32 actual_id;
 	// Avoid duplicating texture if it won't actually change
 	if (mesh_filter_needed && !name.empty())
-		return getTexture(name + "^[applyfiltersformesh", id);
-	return getTexture(name, id);
+		actual_id = getTextureId(name + "^[applyfiltersformesh", false);
+	else
+		actual_id = getTextureId(name, false);
+	if (id)
+		*id = actual_id;
+	return getTexture(actual_id);
+
 }
+
+TextureStochastic *TextureSource::getTextureForMeshStochastic(
+	const std::string &name, u32 &id)
+{
+	u32 actual_id;
+	// Avoid duplicating texture if it won't actually change
+	if (mesh_filter_needed && !name.empty())
+		actual_id = getTextureId(name + "^[applyfiltersformesh", true);
+	else
+		actual_id = getTextureId(name, true);
+	id = actual_id;
+
+	MutexAutoLock lock(m_textureinfo_cache_mutex);
+	if (id >= m_textureinfo_cache.size())
+		return nullptr;
+	return m_textureinfo_cache[actual_id].texture_stochastic;
+}
+
 
 Palette* TextureSource::getPalette(const std::string &name)
 {
@@ -408,10 +472,11 @@ void TextureSource::processQueue()
 	// Fetch textures
 	// NOTE: process outstanding requests from all mesh generation threads
 	while (!m_get_texture_queue.empty()) {
-		GetRequest<std::string, u32, std::thread::id, u8>
+		GetRequest<std::pair<std::string, bool>, u32, std::thread::id, u8>
 				request = m_get_texture_queue.pop();
 
-		m_get_texture_queue.pushResult(request, generateTexture(request.key));
+		m_get_texture_queue.pushResult(request,
+			generateTexture(request.key.first, request.key.second));
 	}
 }
 
