@@ -29,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/directiontables.h"
 #include "client/meshgen/collector.h"
 #include "client/renderingengine.h"
+#include "client/texture_stochastic.hpp"
 #include <array>
 #include <algorithm>
 
@@ -1284,6 +1285,7 @@ MapBlockMesh::MapBlockMesh(MeshMakeData *data, v3s16 camera_offset):
 				m_crack_materials.insert(std::make_pair(
 						std::pair<u8, u32>(layer, i), os.str()));
 				// Replace tile texture with the cracked one
+				// TODO: stochastic texture sampling with crack
 				p.layer.texture = m_tsrc->getTextureForMesh(
 						os.str() + "0",
 						&p.layer.texture_id);
@@ -1347,6 +1349,17 @@ MapBlockMesh::MapBlockMesh(MeshMakeData *data, v3s16 camera_offset):
 				if (p.layer.normal_texture)
 					material.setTexture(1, p.layer.normal_texture);
 				material.setTexture(2, p.layer.flags_texture);
+				// TODO: why is there still a normal texture?
+				if (p.layer.texture_stochastic != nullptr) {
+					material.setTexture(0,
+						p.layer.texture_stochastic->getGaussianizedTexture());
+					material.setTexture(1,
+						p.layer.texture_stochastic->getLUTTexture());
+					store_in_material(material, p.layer.texture_stochastic);
+					assert(get_from_material(material) != nullptr);
+				} else {
+					store_in_material(material, nullptr);
+				}
 			} else {
 				p.layer.applyMaterialOptions(material);
 			}
@@ -1421,6 +1434,7 @@ bool MapBlockMesh::animate(bool faraway, float time, int crack,
 			// Create new texture name from original
 			std::string s = crack_material.second + itos(crack);
 			u32 new_texture_id = 0;
+			// TODO: stochastic texture sampling with crack
 			video::ITexture *new_texture =
 					m_tsrc->getTextureForMesh(s, &new_texture_id);
 			buf->getMaterial().setTexture(0, new_texture);

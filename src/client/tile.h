@@ -33,6 +33,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 class IGameDef;
+class TextureStochastic;
 struct TileSpec;
 struct TileDef;
 
@@ -78,8 +79,8 @@ public:
 
 	virtual ~ISimpleTextureSource() = default;
 
-	virtual video::ITexture* getTexture(
-			const std::string &name, u32 *id = nullptr) = 0;
+	virtual video::ITexture* getTexture(const std::string &name,
+		u32 *id=nullptr) = 0;
 };
 
 class ITextureSource : public ISimpleTextureSource
@@ -89,13 +90,15 @@ public:
 
 	virtual ~ITextureSource() = default;
 
-	virtual u32 getTextureId(const std::string &name)=0;
+	virtual u32 getTextureId(const std::string &name, bool stochastic) = 0;
 	virtual std::string getTextureName(u32 id)=0;
 	virtual video::ITexture* getTexture(u32 id)=0;
-	virtual video::ITexture* getTexture(
-			const std::string &name, u32 *id = nullptr)=0;
-	virtual video::ITexture* getTextureForMesh(
-			const std::string &name, u32 *id = nullptr) = 0;
+	virtual video::ITexture* getTexture(const std::string &name,
+		u32 *id=nullptr) = 0;
+	virtual video::ITexture* getTextureForMesh(const std::string &name,
+		u32 *id=nullptr) = 0;
+	virtual TextureStochastic *getTextureForMeshStochastic(
+		const std::string &name, u32 &id) = 0;
 	/*!
 	 * Returns a palette from the given texture name.
 	 * The pointer is valid until the texture source is
@@ -116,11 +119,11 @@ public:
 
 	virtual ~IWritableTextureSource() = default;
 
-	virtual u32 getTextureId(const std::string &name)=0;
+	virtual u32 getTextureId(const std::string &name, bool stochastic) = 0;
 	virtual std::string getTextureName(u32 id)=0;
 	virtual video::ITexture* getTexture(u32 id)=0;
-	virtual video::ITexture* getTexture(
-			const std::string &name, u32 *id = nullptr)=0;
+	virtual video::ITexture* getTexture(const std::string &name,
+		u32 *id=nullptr) = 0;
 	virtual bool isKnownSourceImage(const std::string &name)=0;
 
 	virtual void processQueue()=0;
@@ -252,6 +255,9 @@ struct TileLayer
 			material.TextureLayer[0].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 			material.TextureLayer[1].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
 		}
+		material.TextureLayer[1].TextureWrapU = video::ETC_CLAMP_TO_EDGE;
+		material.TextureLayer[1].TextureWrapV = video::ETC_CLAMP_TO_EDGE;
+		material.TextureLayer[1].BilinearFilter = true;
 	}
 
 	bool isTileable() const
@@ -275,6 +281,8 @@ struct TileLayer
 
 	video::ITexture *texture = nullptr;
 	video::ITexture *normal_texture = nullptr;
+	// Data for stochastic texture sampling
+	TextureStochastic *texture_stochastic{nullptr};
 	video::ITexture *flags_texture = nullptr;
 
 	u32 shader_id = 0;

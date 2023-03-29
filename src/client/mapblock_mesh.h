@@ -241,6 +241,8 @@ private:
 		TileLayer tile;
 	};
 
+	// TODO: IMesh hat IMeshBuffer hat Material, aber stochastic texture sampling
+	// parameter pro material fehlen
 	scene::IMesh *m_mesh[MAX_TILE_LAYERS];
 	std::vector<MinimapMapblock*> m_minimap_mapblocks;
 	ITextureSource *m_tsrc;

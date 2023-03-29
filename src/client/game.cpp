@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/gameui.h"
 #include "client/inputhandler.h"
 #include "client/tile.h"     // For TextureSource
+#include "client/texture_stochastic.hpp"
 #include "client/keys.h"
 #include "client/joystick_controller.h"
 #include "clientmap.h"
@@ -441,6 +442,12 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	float m_bloom_radius;
 	CachedPixelShaderSetting<float> m_saturation_pixel;
 
+	// Stochastic texture samping uniforms
+	CachedPixelShaderSetting<s32> m_color_lut{"colorLUT"};
+	CachedPixelShaderSetting<f32, 9> m_inverse_decorrelation{"inverseDecorrelation"};
+	CachedPixelShaderSetting<f32, 3> m_col_translation{"colTranslation"};
+	CachedPixelShaderSetting<f32> m_grid_scaling{"gridScaling"};
+
 public:
 	void onSettingsChange(const std::string &name)
 	{
@@ -609,6 +616,17 @@ public:
 		}
 		float saturation = m_client->getEnv().getLocalPlayer()->getLighting().saturation;
 		m_saturation_pixel.set(&saturation, services);
+
+		TextureStochastic *texture_stochastic{m_client->getTextureStochastic()};
+		if (texture_stochastic) {
+			// Set uniforms for stochastic texture sampling
+			float grid_scaling{1.0f};
+			m_grid_scaling.set(&grid_scaling, services);
+			s32 TextureLayerID{1};
+			m_color_lut.set(&TextureLayerID, services);
+			m_inverse_decorrelation.set(texture_stochastic->getCorrelatingMatrix().data(), services);
+			m_col_translation.set(texture_stochastic->getColTranslation().data(), services);
+		}
 	}
 
 	void onSetMaterial(const video::SMaterial &material)

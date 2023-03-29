@@ -29,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "camera.h"               // CameraModes
 #include "util/basic_macros.h"
 #include "client/renderingengine.h"
+#include "client/texture_stochastic.hpp"
 
 #include <queue>
 
@@ -862,6 +863,8 @@ void ClientMap::renderMap(video::IVideoDriver* driver, s32 pass)
 				layer.AnisotropicFilter = false;
 				layer.TrilinearFilter = false;
 			}
+			// TODO: Do I need to setTextureStochastic in the shadow map case with nullptr?
+			m_client->setTextureStochastic(get_from_material(material));
 			driver->setMaterial(material);
 			++material_swaps;
 			material.TextureLayer[ShadowRenderer::TEXTURE_LAYER_SHADOW].Texture = nullptr;

@@ -65,6 +65,7 @@ class MapDatabase;
 class Minimap;
 struct MinimapMapblock;
 class Camera;
+class TextureStochastic;
 class NetworkPacket;
 namespace con {
 class Connection;
@@ -367,6 +368,9 @@ public:
 
 	Camera* getCamera () { return m_camera; }
 	scene::ISceneManager *getSceneManager();
+	void setTextureStochastic(TextureStochastic *texture_stochastic) {
+		m_texture_stochastic = texture_stochastic; }
+	TextureStochastic *getTextureStochastic() { return m_texture_stochastic; }
 
 	bool shouldShowMinimap() const;
 
@@ -500,6 +504,7 @@ private:
 	Camera *m_camera = nullptr;
 	Minimap *m_minimap = nullptr;
 	bool m_minimap_disabled_by_server = false;
+	TextureStochastic *m_texture_stochastic{nullptr};
 
 	// Server serialization version
 	u8 m_server_ser_ver;

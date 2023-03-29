@@ -1,4 +1,12 @@
 uniform sampler2D baseTexture;
+#ifdef STOCHASTIC_TEXTURE_SAMPLING
+	uniform sampler2D colorLUT;
+	uniform vec2 texelSize0;
+	//~ uniform float scale;
+	uniform mat3 inverseDecorrelation;
+	uniform vec3 colTranslation;
+	uniform float gridScaling;
+#endif
 
 uniform vec3 dayLight;
 uniform vec4 skyBgColor;
@@ -20,7 +28,7 @@ uniform float animationTimer;
 	uniform vec4 CameraPos;
 	uniform float xyPerspectiveBias0;
 	uniform float xyPerspectiveBias1;
-	
+
 	varying float adj_shadow_strength;
 	varying float cosLight;
 	varying float f_normal_length;
@@ -362,12 +370,175 @@ float getShadow(sampler2D shadowsampler, vec2 smTexCoord, float realDistance)
 #endif
 #endif
 
+
+#ifdef STOCHASTIC_TEXTURE_SAMPLING
+
+// from https://www.shadertoy.com/view/ttByDw
+// for converting from linear to sRGB
+vec3 LinearToSRGB(vec3 rgb)
+{
+	rgb = clamp(rgb, 0.0, 1.0);
+	return mix(
+		pow(rgb, vec3(1.0 / 2.4)) * 1.055 - 0.055,
+		rgb * 12.92,
+		// Newer GLES supports a bvec here
+		vec3(lessThan(rgb, vec3(0.0031308, 0.0031308, 0.0031308)))
+	);
+}
+
+// LMS to sRGB/bt.709 primaries transformation matrix; column-major
+const mat3 lms_to_rgb = mat3(
+	4.0767416621, -1.2684380046, -0.0041960863,
+	-3.3077115913, 2.6097574011, -0.7034186147,
+	0.2309699292, -0.3413193965, 1.7076147010
+);
+
+vec3 PerceptualToLinear(vec3 col)
+{
+	return lms_to_rgb * (col * col * col);
+}
+
+
+/* TODO: this nice hash is not gles 1.2 compatible
+// Copied from https://www.shadertoy.com/view/XlGcRh and comments
+// http://www.jcgt.org/published/0009/03/02/
+uvec3 pcg3d(uvec3 v) {
+
+    v = v * 1664525u + 1013904223u;
+
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
+
+	v = ((v >> int((v >> 28u) + 4u)) ^ v) * 277803737u;
+    v ^= v >> 16u;
+
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
+
+    return v;
+}
+
+vec2 hash(ivec2 p_i)
+{
+	return vec2(pcg3d(uvec3(p_i, 0)).xy) * exp2(-32.0);
+}
+*/
+
+// TODO: this hash is bad
+vec2 hash(ivec2 p_i)
+{
+	vec2 v = vec2(p_i) * mat2(127.1, 311.7, 269.5, 183.3);
+	return fract(sin(v)*vec2(43758.5453));
+}
+
+vec4 sample_texture(vec2 uv)
+{
+	// Get triangle info
+	float w1, w2, w3;
+	ivec2 vertex1, vertex2, vertex3;
+	// Round to texels
+	uv = 1.0 * texelSize0 * floor(uv / texelSize0);
+
+// Copied from the deliot2019_openGLdemo
+// (https://eheitzresearch.wordpress.com/738-2/)
+// Compute local triangle barycentric coordinates and vertex IDs
+// TriangleGrid
+	// Scaling of the input
+	vec2 uv_grid = uv * gridScaling;
+
+	// Skew input space into simplex triangle grid
+	const mat2 gridToSkewedGrid = mat2(1.0, 0.0, -0.57735027, 1.15470054);
+	vec2 skewedCoord = gridToSkewedGrid * uv_grid;
+
+	// Compute local triangle vertex IDs and local barycentric coordinates
+	ivec2 baseId = ivec2(floor(skewedCoord));
+	vec3 temp = vec3(fract(skewedCoord), 0);
+	temp.z = 1.0 - temp.x - temp.y;
+	if (temp.z > 0.0)
+	{
+		w1 = temp.z;
+		w2 = temp.y;
+		w3 = temp.x;
+		vertex1 = baseId;
+		vertex2 = baseId + ivec2(0, 1);
+		vertex3 = baseId + ivec2(1, 0);
+	}
+	else
+	{
+		w1 = -temp.z;
+		w2 = 1.0 - temp.y;
+		w3 = 1.0 - temp.x;
+		vertex1 = baseId + ivec2(1, 1);
+		vertex2 = baseId + ivec2(1, 0);
+		vertex3 = baseId + ivec2(0, 1);
+	}
+// TriangleGrid end
+
+
+	// Assign random offset to each triangle vertex
+	vec2 uv1 = uv + hash(vertex1);
+	vec2 uv2 = uv + hash(vertex2);
+	vec2 uv3 = uv + hash(vertex3);
+
+	// Fetch Gaussian input
+	vec4 G1 = texture2D(baseTexture, uv1);
+	vec4 G2 = texture2D(baseTexture, uv2);
+	vec4 G3 = texture2D(baseTexture, uv3);
+
+	// Variance-preserving blending
+	vec4 G = w1*G1 + w2*G2 + w3*G3;
+	G = (G - vec4(0.5)) * inversesqrt(w1*w1 + w2*w2 + w3*w3) + vec4(0.5);
+
+	vec4 col;
+	col.r	= texture2D(colorLUT, vec2(G.r, 0.0)).r;
+	col.g	= texture2D(colorLUT, vec2(G.g, 0.0)).g;
+	col.b	= texture2D(colorLUT, vec2(G.b, 0.0)).b;
+	col.rgb = PerceptualToLinear(
+		inverseDecorrelation * (col.rgb + colTranslation));
+	col.a	= texture2D(colorLUT, vec2(G.a, 0.0)).a;
+
+	// Minetest shaders work with non-linear colours
+	col.rgb = LinearToSRGB(col.rgb);
+	return col;
+}
+
+vec2 world_aligned_uv()
+{
+	vec2 uv;
+	// TODO: avoid problems caused by worldPosition being relative to cameraOffset
+	if (abs(vNormal.y) == 1.0) {
+		uv = vec2(worldPosition.x, -vNormal.y * worldPosition.z) / 10.0;
+	} else {
+		vec3 tangent = cross(vNormal, vec3(0.0, 1.0, 0.0));
+		vec3 gradient = cross(vNormal, tangent);
+		uv.y = dot(worldPosition / 10.0, gradient);
+		uv.x = dot(worldPosition / 10.0, tangent);
+	}
+	return uv;
+}
+
+#else  // STOCHASTIC_TEXTURE_SAMPLING
+
+vec4 sample_texture(vec2 uv)
+{
+	return texture2D(baseTexture, uv).rgba;
+}
+
+#endif  // STOCHASTIC_TEXTURE_SAMPLING
+
+
 void main(void)
 {
 	vec3 color;
+#if STOCHASTIC_TEXTURE_SAMPLING
+	vec2 uv = world_aligned_uv();
+#else
 	vec2 uv = varTexCoord.st;
+#endif
 
-	vec4 base = texture2D(baseTexture, uv).rgba;
+	vec4 base = sample_texture(uv);
 	// If alpha is zero, we can just discard the pixel. This fixes transparency
 	// on GPUs like GC7000L, where GL_ALPHA_TEST is not implemented in mesa,
 	// and also on GLES 2, where GL_ALPHA_TEST is missing entirely.

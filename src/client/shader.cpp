@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include <array>
 #include <fstream>
 #include <iterator>
 #include "shader.h"
@@ -743,6 +744,10 @@ ShaderInfo ShaderSource::generateShader(const std::string &name,
 	PROVIDE(TILE_MATERIAL_PLAIN_ALPHA);
 
 #undef PROVIDE
+
+	// TODO
+	bool stochastic{true};
+	shaders_header << "#define STOCHASTIC_TEXTURE_SAMPLING " << stochastic << "\n";
 
 	shaders_header << "#define MATERIAL_TYPE " << (int)material_type << "\n";
 	shaders_header << "#define DRAW_TYPE " << (int)drawtype << "\n";
