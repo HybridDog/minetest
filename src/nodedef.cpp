@@ -12,6 +12,7 @@
 #include "client/renderingengine.h"
 #include "client/texturesource.h"
 #include "client/tile.h"
+#include "client/texture_stochastic.hpp"
 #include <IMeshManipulator.h>
 #endif
 #include "log.h"
@@ -671,8 +672,15 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 		u8 material_type, u32 shader_id, bool backface_culling,
 		const TextureSettings &tsettings)
 {
-	layer->shader_id     = shader_id;
-	layer->texture       = tsrc->getTextureForMesh(tiledef.name, &layer->texture_id);
+	bool stochastic{true};  // TODO
+	layer->shader_id = shader_id;
+	if (stochastic && tiledef.name != "") {
+		layer->texture_stochastic = tsrc->getTextureForMeshStochastic(
+			tiledef.name, layer->texture_id);
+		layer->texture = layer->texture_stochastic->getGaussianizedTexture();
+	} else {
+		layer->texture = tsrc->getTextureForMesh(tiledef.name, &layer->texture_id);
+	}
 	layer->material_type = material_type;
 
 	bool has_scale = tiledef.scale > 0;
@@ -736,6 +744,7 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 					layer->texture->getOriginalSize(), i);
 
 			FrameSpec &frame = (*layer->frames)[i];
+			// TODO: Stochastic texture sampling auch hier
 			frame.texture = tsrc->getTextureForMesh(os.str(), &frame.texture_id);
 		}
 	}
@@ -909,6 +918,7 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 
 	// Tiles (fill in f->tiles[])
 	for (u16 j = 0; j < 6; j++) {
+		// TODO: aligned if stochastic
 		tiles[j].world_aligned = isWorldAligned(tdef[j].align_style,
 				tsettings.world_aligned_mode, drawtype);
 		fillTileAttribs(tsrc, &tiles[j].layers[0], tiles[j], tdef[j],

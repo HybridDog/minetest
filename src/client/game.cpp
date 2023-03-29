@@ -13,6 +13,7 @@
 #include "client/gameui.h"
 #include "client/inputhandler.h"
 #include "client/texturepaths.h"
+#include "client/texture_stochastic.hpp"
 #include "client/keys.h"
 #include "client/joystick_controller.h"
 #include "client/mapblock_mesh.h"
@@ -384,6 +385,7 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	CachedVertexShaderSetting<float, 2> m_texel_size0_vertex{"texelSize0"};
 	CachedPixelShaderSetting<float, 2> m_texel_size0_pixel{"texelSize0"};
 	v2f m_texel_size0;
+	TextureStochastic *m_texture_stochastic = nullptr;
 	CachedStructPixelShaderSetting<float, 7> m_exposure_params_pixel{
 		"exposureParams",
 		std::array<const char*, 7> {
@@ -410,6 +412,12 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 	static constexpr std::array<const char*, 1> SETTING_CALLBACKS = {
 		"exposure_compensation",
 	};
+
+	// Stochastic texture samping uniforms
+	CachedPixelShaderSetting<SamplerLayer_t> m_color_lut{"colorLUT"};
+	CachedPixelShaderSetting<f32, 9> m_inverse_decorrelation{"inverseDecorrelation"};
+	CachedPixelShaderSetting<f32, 3> m_col_translation{"colTranslation"};
+	CachedPixelShaderSetting<f32> m_grid_scaling{"gridScaling"};
 
 public:
 	void onSettingsChange(const std::string &name)
@@ -483,6 +491,15 @@ public:
 
 		m_texel_size0_vertex.set(m_texel_size0, services);
 		m_texel_size0_pixel.set(m_texel_size0, services);
+
+		if (m_texture_stochastic) {
+			float grid_scaling = 1.0f;
+			m_grid_scaling.set(&grid_scaling, services);
+			tex_id = 1;
+			m_color_lut.set(&tex_id, services);
+			m_inverse_decorrelation.set(m_texture_stochastic->getCorrelatingMatrix().data(), services);
+			m_col_translation.set(m_texture_stochastic->getColTranslation().data(), services);
+		}
 
 		const auto &lighting = m_client->getEnv().getLocalPlayer()->getLighting();
 
@@ -564,6 +581,7 @@ public:
 		} else {
 			m_texel_size0 = v2f();
 		}
+		m_texture_stochastic = material.TextureStochasticPtr;
 	}
 };
 
