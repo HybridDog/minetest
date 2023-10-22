@@ -1,10 +1,8 @@
 #! /bin/bash -eu
 
 # Use ccache if it is available
-if command -v ccache >&-; then
-	extra_args=(-DCMAKE_C_COMPILER_LAUNCHER=ccache \
-		-DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
-fi
+extra_args=()
+command -v ccache >/dev/null && extra_args+=(-DCMAKE_{C,CCX}_COMPILER_LAUNCHER=ccache)
 
 cd /tmp
 git clone --recursive https://github.com/jupp0r/prometheus-cpp
