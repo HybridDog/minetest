@@ -39,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install deps
@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install deps
@@ -89,7 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install deps
@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install deps
@@ -148,7 +148,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install deps
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install compiler
@@ -210,7 +210,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: ccache
-        uses: hendrikmuhs/ccache-action@fba817f3c0db4f854d7a3ee688241d6754da166e
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ github.job }}
       - name: Install compiler
