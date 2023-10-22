@@ -27,10 +27,8 @@ toolchain_file=$topdir/toolchain_${compiler/-gcc/}.cmake
 echo "Using $toolchain_file"
 
 # Use ccache if it is available
-if command -v ccache >&-; then
-	extra_args=(-DCMAKE_C_COMPILER_LAUNCHER=ccache \
-		-DCMAKE_CXX_COMPILER_LAUNCHER=ccache)
-fi
+extra_args=()
+command -v ccache >/dev/null && extra_args+=(-DCMAKE_{C,CCX}_COMPILER_LAUNCHER=ccache)
 
 find_runtime_dlls i686-w64-mingw32
 
