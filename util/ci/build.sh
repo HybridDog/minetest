@@ -2,7 +2,7 @@
 
 # Use ccache if it is available
 extra_args=()
-command -v ccache >/dev/null && extra_args+=(-DCMAKE_{C,CCX}_COMPILER_LAUNCHER=ccache)
+command -v ccache >/dev/null && extra_args+=(-DCMAKE_{C,CXX}_COMPILER_LAUNCHER=ccache)
 
 cmake -B build \
 	"${extra_args[@]}" \
