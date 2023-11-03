@@ -325,9 +325,8 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 
 	// put the original texture into a matrix
 	//~ u32 *raw = (u32 *)img->lock(video::ETLM_READ_ONLY, 0);
-	u32 *raw = (u32 *)img->lock();
+	u32 *raw = (u32 *)img->getData();
 	struct matrix *matrices = image_to_matrices(raw, w, h);
-	img->unlock();
 
 	int k;
 	// get the total size of all mipmap images in bytes
@@ -379,7 +378,8 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	}
 
 	// create the texture
-	video::ITexture *tex = driver->addTexture(name.c_str(), img, data);
+	video::ITexture *tex = driver->addTexture(name.c_str(), img);
+	tex->regenerateMipMapLevels(data);
 
 	// clean up memory
 	free_matrices(matrices);
