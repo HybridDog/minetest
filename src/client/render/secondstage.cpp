@@ -120,6 +120,10 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	static const u8 TEXTURE_EXPOSURE_1 = 3;
 	static const u8 TEXTURE_EXPOSURE_2 = 4;
 	static const u8 TEXTURE_FXAA = 5;
+	static const u8 TEXTURE_SSAA_SSIM_L = 6;
+	static const u8 TEXTURE_SSAA_SSIM_L2_OR_FINAL = 7;
+	static const u8 TEXTURE_SSAA_SSIM_M = 8;
+	static const u8 TEXTURE_SSAA_SSIM_R = 9;
 	static const u8 TEXTURE_BLOOM_DOWN = 10;
 	static const u8 TEXTURE_BLOOM_UP = 20;
 
@@ -128,10 +132,11 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 	const std::string antialiasing = g_settings->get("antialiasing");
 	const bool enable_bloom = g_settings->getBool("enable_bloom");
 	const bool enable_auto_exposure = g_settings->getBool("enable_auto_exposure");
-	const bool enable_ssaa = antialiasing == "ssaa";
+	const bool enable_ssaa_smooth = antialiasing == "ssaa";
+	const bool enable_ssaa_ssim_based = antialiasing == "ssaa_ssim_based" && color_format == video::ECF_A16B16G16R16F;
 	const bool enable_fxaa = antialiasing == "fxaa";
 
-	if (enable_ssaa) {
+	if (enable_ssaa_smooth || enable_ssaa_ssim_based) {
 		u16 ssaa_scale = MYMAX(2, g_settings->getU16("fsaa"));
 		scale *= ssaa_scale;
 	}
@@ -224,13 +229,49 @@ RenderStep *addPostProcessing(RenderPipeline *pipeline, RenderStep *previousStep
 		effect->setBilinearFilter(0, true);
 		effect->setRenderSource(buffer);
 		effect->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, TEXTURE_FXAA));
+	} else if (enable_ssaa_ssim_based) {
+		final_stage_source = TEXTURE_SSAA_SSIM_L2_OR_FINAL;
+
+		// SSAA with SSIM-based downscaling is based on
+		// "Perceptually Based Downscaling of Images"
+		// by A. Cengiz Öztireli and Markus Gross.
+
+		buffer->setTexture(TEXTURE_SSAA_SSIM_L, v2f{1.0f, 1.0f}, "l", color_format);
+		buffer->setTexture(TEXTURE_SSAA_SSIM_L2_OR_FINAL, v2f{1.0f, 1.0f}, "l2_or_final", color_format);
+		shader_id = client->getShaderSource()->getShader("ssaa_ssim_based_1", TILE_MATERIAL_PLAIN);
+		PostProcessingStep *effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8>{TEXTURE_COLOR});
+		pipeline->addStep(effect);
+		// TODO: Do we need to disable bilinear filtering or is it already off
+		// by default?
+		effect->setBilinearFilter(0, false);
+		effect->setRenderSource(buffer);
+		effect->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, std::vector<u8>{TEXTURE_SSAA_SSIM_L, TEXTURE_SSAA_SSIM_L2_OR_FINAL}));
+
+		buffer->setTexture(TEXTURE_SSAA_SSIM_M, v2f{1.0f, 1.0f}, "m", color_format);
+		buffer->setTexture(TEXTURE_SSAA_SSIM_R, v2f{1.0f, 1.0f}, "r", color_format);
+		shader_id = client->getShaderSource()->getShader("ssaa_ssim_based_2", TILE_MATERIAL_PLAIN);
+		effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8>{TEXTURE_SSAA_SSIM_L, TEXTURE_SSAA_SSIM_L2_OR_FINAL});
+		pipeline->addStep(effect);
+		effect->setBilinearFilter(0, false);
+		effect->setBilinearFilter(1, false);
+		effect->setRenderSource(buffer);
+		effect->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, std::vector<u8>{TEXTURE_SSAA_SSIM_M, TEXTURE_SSAA_SSIM_R}));
+
+		shader_id = client->getShaderSource()->getShader("ssaa_ssim_based_3", TILE_MATERIAL_PLAIN);
+		effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8>{TEXTURE_SSAA_SSIM_L, TEXTURE_SSAA_SSIM_M, TEXTURE_SSAA_SSIM_R});
+		pipeline->addStep(effect);
+		effect->setBilinearFilter(0, false);
+		effect->setBilinearFilter(1, false);
+		effect->setBilinearFilter(2, false);
+		effect->setRenderSource(buffer);
+		effect->setRenderTarget(pipeline->createOwned<TextureBufferOutput>(buffer, TEXTURE_SSAA_SSIM_L2_OR_FINAL));
 	}
 
 	// final merge
 	shader_id = client->getShaderSource()->getShader("second_stage", TILE_MATERIAL_PLAIN, NDT_MESH);
 	PostProcessingStep *effect = pipeline->createOwned<PostProcessingStep>(shader_id, std::vector<u8> { final_stage_source, TEXTURE_BLOOM_UP, TEXTURE_EXPOSURE_2 });
 	pipeline->addStep(effect);
-	if (enable_ssaa)
+	if (enable_ssaa_smooth)
 		effect->setBilinearFilter(0, true);
 	effect->setBilinearFilter(1, true);
 	effect->setRenderSource(buffer);

@@ -82,7 +82,7 @@ vec3 applySaturation(vec3 color, float factor)
 void main(void)
 {
 	vec2 uv = varTexCoord.st;
-#ifdef ENABLE_SSAA
+#ifdef ENABLE_SSAA_SMOOTH
 	vec4 color = vec4(0.);
 	for (float dx = 1.; dx < SSAA_SCALE; dx += 2.)
 	for (float dy = 1.; dy < SSAA_SCALE; dy += 2.)
@@ -92,8 +92,10 @@ void main(void)
 	vec4 color = texture2D(rendered, uv).rgba;
 #endif
 
+#ifndef ENABLE_SSAA_SSIM_BASED
 	// translate to linear colorspace (approximate)
 	color.rgb = pow(color.rgb, vec3(2.2));
+#endif
 
 #ifdef ENABLE_BLOOM_DEBUG
 	if (uv.x > 0.5 || uv.y > 0.5)
