@@ -9,28 +9,52 @@
 
 
 #define CLAMP(V, A, B) (V) < (A) ? (A) : (V) > (B) ? (B) : (V)
+#define MIN(V, R) ((V) < (R) ? (V) : (R))
+#define MAX(V, R) ((V) > (R) ? (V) : (R))
+#define INDEX(X, Y, STRIDE) ((Y) * (STRIDE) + (X))
 
-struct matrix {
+struct Matrix {
 	u32 w;
 	u32 h;
-	float *data;
+	std::unique_ptr<f32[]> data;
+	Matrix(u32 width, u32 height):
+		w{width},
+		h{height},
+		data{std::make_unique<f32[]>(width * height)}
+	{}
 };
 
-/*! \brief get y, cb and cr values each in [0;1] from u8 b, g and r values
+/*! \brief linear to sRGB conversion
  *
- * there's gamma correction because r, g and b are obviously in srgb format,
+ * taken from https://github.com/tobspr/GLSL-Color-Spaces/
+ */
+f32 linear_to_srgb(f32 v)
+{
+	if (v > 0.0031308f)
+		return 1.055f * powf(v, 1.0f / 2.4f) - 0.055f;
+	return 12.92f * v;
+}
+f32 srgb_to_linear(f32 v)
+{
+	if (v > 0.04045f)
+		return powf((v + 0.055f) / 1.055f, 2.4f);
+	return v / 12.92f;
+}
+
+/*! \brief get y, cb and cr values each in [0;1] from u8 r, g and b values
+ *
+ * there's gamma correction,
  * see http://www.ericbrasseur.org/gamma.html?i=1#Assume_a_gamma_of_2.2
  * 0.5 is added to cb and cr to have them in [0;1]
  */
-static void rgb2ycbcr(u8 b8, u8 g8, u8 r8, float *y, float *cb, float *cr)
+static void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
 {
-	float divider = 1.0f / 255.0f;
-	float r = powf(r8 * divider, 2.2f);
-	float g = powf(g8 * divider, 2.2f);
-	float b = powf(b8 * divider, 2.2f);
-	*y = (0.299f * r + 0.587f * g + 0.114f * b);
-	*cb = (-0.168736f * r - 0.331264f * g + 0.5f * b) + 0.5f;
-	*cr = (0.5f * r - 0.418688f * g - 0.081312f * b) + 0.5f;
+	f32 r = srgb_to_linear(r_8 / 255.0f);
+	f32 g = srgb_to_linear(g_8 / 255.0f);
+	f32 b = srgb_to_linear(b_8 / 255.0f);
+	y = (0.299f * r + 0.587f * g + 0.114f * b);
+	cb = (-0.168736f * r - 0.331264f * g + 0.5f * b) + 0.5f;
+	cr = (0.5f * r - 0.418688f * g - 0.081312f * b) + 0.5f;
 }
 
 /*! \brief the inverse of the function above
@@ -38,222 +62,150 @@ static void rgb2ycbcr(u8 b8, u8 g8, u8 r8, float *y, float *cb, float *cr)
  * numbers from http://www.equasys.de/colorconversion.html
  * if values are too big or small, they're clamped
  */
-static void ycbcr2rgb(float y, float cb, float cr, u8 *b, u8 *g, u8 *r)
+static void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
 {
-	float vr = (y + 1.402f * (cr - 0.5f));
-	float vg = (y - 0.344136f * (cb - 0.5f) - 0.714136f * (cr - 0.5f));
-	float vb = (y + 1.772f * (cb - 0.5f));
-	float exponent = 1.0f / 2.2f;
-	vr = powf(vr, exponent);
-	vg = powf(vg, exponent);
-	vb = powf(vb, exponent);
-	*r = CLAMP(vr * 255.0f, 0, 255);
-	*g = CLAMP(vg * 255.0f, 0, 255);
-	*b = CLAMP(vb * 255.0f, 0, 255);
+	f32 r = (y + 1.402f * (cr - 0.5f));
+	f32 g = (y - 0.344136f * (cb - 0.5f) - 0.714136f * (cr - 0.5f));
+	f32 b = (y + 1.772f * (cb - 0.5f));
+	r = linear_to_srgb(r);
+	g = linear_to_srgb(g);
+	b = linear_to_srgb(b);
+	r_8 = CLAMP(r * 255.0f, 0, 255);
+	g_8 = CLAMP(g * 255.0f, 0, 255);
+	b_8 = CLAMP(b * 255.0f, 0, 255);
 }
 
 /*! \brief Convert an bgra image to 4 ycbcr matrices with values in [0, 1]
  */
-static struct matrix *image_to_matrices(u32 *raw, u32 w, u32 h)
+void image_to_matrices(u32 *raw, std::array<Matrix, 4> &matrices)
 {
-	struct matrix *matrices = new struct matrix[4];
-	for (int i = 0; i < 4; ++i) {
-		matrices[i].w = w;
-		matrices[i].h = h;
-		matrices[i].data = new float[w * h];
-	}
+	u32 w = matrices[0].w;
+	u32 h = matrices[0].h;
 	for (u32 i = 0; i < w * h; ++i) {
 		u8 *bgra = (u8 *)&raw[i];
 		// put y, cb, cr and transpatency into the matrices
-		rgb2ycbcr(*bgra, *(bgra+1), *(bgra+2),
-			&matrices[0].data[i], &matrices[1].data[i], &matrices[2].data[i]);
-		float divider = 1.0f / 255.0f;
-		matrices[3].data[i] = *(bgra+3) * divider;
+		rgb2ycbcr(*(bgra+2), *(bgra+1), *bgra,
+			matrices[0].data[i], matrices[1].data[i], matrices[2].data[i]);
+		matrices[3].data[i] = *(bgra+3) / 255.0f;
 	}
-	return matrices;
 }
 
 /*! \brief Convert 4 matrices to an bgra image, which is passed
  */
-static void matrices_to_image(struct matrix *matrices, u32 *raw)
+static void matrices_to_image(std::array<Matrix, 4> &matrices, u32 *raw)
 {
 	int w = matrices[0].w;
 	int h = matrices[0].h;
 	for (int i = 0; i < w * h; ++i) {
 		u8 *bgra = (u8 *)&raw[i];
 		ycbcr2rgb(matrices[0].data[i], matrices[1].data[i], matrices[2].data[i],
-			bgra, bgra+1, bgra+2);
+			*(bgra+2), *(bgra+1), *bgra);
 		float a = matrices[3].data[i] * 255;
 		*(bgra+3) = CLAMP(a, 0, 255);
 	}
 }
 
-/*! \brief Frees 4 matrices
- *
- * \param mat The 4 matrices, e.g. obtained form image_to_matrices.
- */
-static void free_matrices(struct matrix *matrices)
-{
-	for (int i = 0; i < 4; ++i)
-		delete[] matrices[i].data;
-	delete[] matrices;
-}
 
 /*! \brief The actual downscaling algorithm
  *
- * \param mat One of the 4 matrices obtained form image_to_matrices.
+ * \param mat The 4 matrices obtained form image_to_matrices.
  * \param s The factor by which the image should become downscaled.
  */
-static void downscale_perc(struct matrix *mat, int s, struct matrix *target)
+static void downscale_perc(Matrix &mat, int s, Matrix &target)
 {
 	// preparation
-	int w = mat->w; // input width
-	int h = mat->h;
-	float *input = mat->data;
-	int w2 = target->w; // output width
-	int h2 = target->h;
-	int output_elems_cnt = w2 * h2;
-	float *l = new float[output_elems_cnt];
-	float *l2 = new float[output_elems_cnt];
-	float *d = target->data;
-
-	// set d's entries to 0 (because it's used for a sum)
-	for (int i = 0; i < w2 * h2; ++i)
-		d[i] = 0;
+	int w = mat.w; // input width
+	int h = mat.h;
+	auto &input{mat.data};
+	int w2 = w / s; // output width
+	int h2 = h / s;
+	int input_size = w * h * sizeof(f32);
+	int output_size = input_size / (s * s);
+	//~ fprintf(stderr, "w, h, s: %d, %d, %d\n", w,h,s);
+	auto l{std::make_unique<f32[]>(output_size)};
+	auto l2{std::make_unique<f32[]>(output_size)};
+	auto m_all{std::make_unique<f32[]>(output_size)};
+	auto r_all{std::make_unique<f32[]>(output_size)};
+	auto &d{target.data};
 
 	// get l and l2, the input image and it's size are used only here
-	for (int ysm = 0; ysm < h2; ++ysm) {
-		for (int xsm = 0; xsm < w2; ++xsm) {
-			// xsm and ysm are coords for the subsampled image
-			int x = xsm * s;
-			int y = ysm * s;
-			float acc = 0;
-			float acc2 = 0;
+	f32 divider_s = 1.0f / (s * s);
+	for (int y_start = 0; y_start < h2; ++y_start) {
+		for (int x_start = 0; x_start < w2; ++x_start) {
+			// x_start and y_start are coordinates for the subsampled image
+			int x = x_start * s;
+			int y = y_start * s;
+			f32 acc = 0;
+			f32 acc2 = 0;
 			for (int yc = y; yc < y + s; ++yc) {
 				for (int xc = x; xc < x + s; ++xc) {
-					float v = input[((yc + h) % h) * w + (xc + w) % w];
+					// xc, yc are always inside bounds
+					f32 v = input[INDEX(xc, yc, w)];
 					acc += v;
 					acc2 += v * v;
 				}
 			}
-			int ism = ysm*w2+xsm;
-			float divider = 1.0f / (s * s);
-			l[ism] = acc * divider;
-			l2[ism] = acc2 * divider;
+			int i = INDEX(x_start, y_start, w2);
+			l[i] = acc * divider_s;
+			l2[i] = acc2 * divider_s;
 		}
 	}
 
-	float patch_sz_div = 1.0f / (SQR_NP * SQR_NP);
-	// calculate the average of the results of all possible patch sets
-	for (int y_offset = 0; y_offset > -SQR_NP; --y_offset) {
-		for (int x_offset = 0; x_offset > -SQR_NP; --x_offset) {
-			float *m = new float[output_elems_cnt];
-			float *r = new float[output_elems_cnt];
+	f32 patch_sz_div = 1.0f / (SQR_NP * SQR_NP);
 
-			// get m
-			for (int y = 0; y < h2; ++y) {
-				for (int x = 0; x < w2; ++x) {
-					float acc = 0;
-					// ys (y start) can be -1, then h2-1 is used for the index
-					int ys = y - (y + SQR_NP + y_offset) % SQR_NP;
-					int xs = x - (x + SQR_NP + x_offset) % SQR_NP;
-					for (int yc = ys; yc < ys + SQR_NP; ++yc) {
-						for (int xc = xs; xc < xs + SQR_NP; ++xc) {
-							acc += l[((yc + h2) % h2) * w2 + (xc + w2) % w2];
-						}
-					}
-					m[y*w2+x] = acc * patch_sz_div;
+	// Calculate m and r for all patch offsets
+	for (int y_start = 0; y_start < h2; ++y_start) {
+		for (int x_start = 0; x_start < w2; ++x_start) {
+			f32 acc_m = 0;
+			f32 acc_r_1 = 0;
+			f32 acc_r_2 = 0;
+			for (int y = y_start; y < y_start + SQR_NP; ++y) {
+				for (int x = x_start; x < x_start + SQR_NP; ++x) {
+					int xi = x;
+					int yi = y;
+					xi = xi % w2;
+					yi = yi % h2;
+					int i = INDEX(xi, yi, w2);
+					acc_m += l[i];
+					acc_r_1 += l[i] * l[i];
+					acc_r_2 += l2[i];
 				}
 			}
-
-			// get r
-			for (int y = 0; y < h2; ++y) {
-				for (int x = 0; x < w2; ++x) {
-					float acc = 0;
-					float acc2 = 0;
-					int ys = y - (y + SQR_NP + y_offset) % SQR_NP;
-					int xs = x - (x + SQR_NP + x_offset) % SQR_NP;
-					for (int yc = ys; yc < ys + SQR_NP; ++yc) {
-						for (int xc = xs; xc < xs + SQR_NP; ++xc) {
-							int i = ((yc + h2) % h2) * w2 + (xc + w2) % w2;
-							acc += l[i] * l[i];
-							acc2 += l2[i];
-						}
-					}
-					int i = y*w2+x;
-					float mv = m[i];
-					float slv = acc * patch_sz_div - mv * mv;
-					float shv = acc2 * patch_sz_div - mv * mv;
-					if (slv >= 0.000001f) // epsilon is 10⁻⁶
-						r[i] = sqrtf(shv / slv);
-					else
-						r[i] = 0;
-				}
-			}
-
-			// get d, which is the output
-			for (int y = 0; y < h2; ++y) {
-				for (int x = 0; x < w2; ++x) {
-					float acc_m = 0;
-					float acc_r = 0;
-					float acc_t = 0;
-					int ys = y - (y + SQR_NP + y_offset) % SQR_NP;
-					int xs = x - (x + SQR_NP + x_offset) % SQR_NP;
-					for (int yc = ys; yc < ys + SQR_NP; ++yc) {
-						for (int xc = xs; xc < xs + SQR_NP; ++xc) {
-							int i = ((yc + h2) % h2) * w2 + (xc + w2) % w2;
-							acc_m += m[i];
-							acc_r += r[i];
-							acc_t += r[i] * m[i];
-						}
-					}
-					int i = y*w2+x;
-					d[i] += (
-							acc_m * patch_sz_div
-							+ acc_r * patch_sz_div * l[i]
-							- acc_t * patch_sz_div
-						);
-				}
-			}
-			delete[] m;
-			delete[] r;
+			f32 mv = acc_m * patch_sz_div;
+			f32 slv = acc_r_1 * patch_sz_div - mv * mv;
+			f32 shv = acc_r_2 * patch_sz_div - mv * mv;
+			int i = INDEX(x_start, y_start, w2);
+			m_all[i] = mv;
+			if (slv >= 0.000001f) // epsilon is 10⁻⁶
+				r_all[i] = sqrtf(shv / slv);
+			else
+				r_all[i] = 2.0f;
 		}
 	}
 
-	for (int i = 0; i < w2 * h2; ++i) {
-		// divide values in d for the (arithmetic) average
-		d[i] *= patch_sz_div;
-		// select a mix between linear and this downscaling
-		d[i] = l[i] * LINEAR_RATIO + d[i] * (1.0f - LINEAR_RATIO);
+	// Calculate the average of the results of all possible patch sets
+	// d is the output
+	for (int y = 0; y < h2; ++y) {
+		for (int x = 0; x < w2; ++x) {
+			int i = INDEX(x, y, w2);
+			f32 liner_scaled = l[i];
+			f32 acc_d = 0;
+			for (int y_offset = 0; y_offset > -SQR_NP; --y_offset) {
+				for (int x_offset = 0; x_offset > -SQR_NP; --x_offset) {
+					int x_patch_off = x + x_offset;
+					int y_patch_off = y + y_offset;
+					x_patch_off = (x_patch_off + w2) % w2;
+					y_patch_off = (y_patch_off + h2) % h2;
+					int i_patch_off = INDEX(x_patch_off, y_patch_off, w2);
+					f32 mv = m_all[i_patch_off];
+					f32 rv = r_all[i_patch_off];
+					acc_d += mv + rv * liner_scaled - rv * mv;
+				}
+			}
+			d[i] = liner_scaled * LINEAR_RATIO
+				+ acc_d * patch_sz_div * (1.0f - LINEAR_RATIO);
+		}
 	}
-
-/*
-	for (int i = 0; i < w2 * h2; ++i) {
-		// divide values in d for the (arithmetic) average
-		d[i] *= patch_sz_div;
-	}
-
-	// select a mix between linear and this downscaling for low resolutions
-	float linear_ratio = 0.0f;
-	if (w2 <= 3)
-		// likely generating a 2x2 image
-		linear_ratio = 0.75f;
-	else if (w2 <= 7)
-		// likely generating a 4x4 image
-		linear_ratio = 0.5f;
-	else if (w2 <= 15)
-		// likely generating a 8x8 image
-		linear_ratio = 0.3f;
-	if (linear_ratio > 0.0f) {
-		float other_ratio = 1.0f - linear_ratio;
-		for (int i = 0; i < w2 * h2; ++i)
-			d[i] = l[i] * linear_ratio + d[i] * other_ratio;
-	}
-*/
-
-	// tidy up
-	delete[] l;
-	delete[] l2;
 }
 
 /*! \brief Function which calls functions for downscaling
@@ -262,22 +214,19 @@ static void downscale_perc(struct matrix *mat, int s, struct matrix *target)
  * \param downscale_factor Must be a natural number.
  * \param raw The place where the downscaled srgb image is saved to.
  */
-static void downscale_an_image(struct matrix *matrices, int downscale_factor,
-	u32 *raw)
+static void downscale_an_image(std::array<Matrix, 4> &matrices,
+	int downscale_factor, u32 *raw)
 {
-	int h = matrices[0].h;
-	int w = matrices[0].w;
-	int h2 = h / downscale_factor;
-	int w2 = w / downscale_factor;
-	struct matrix *smaller_matrices = new struct matrix[4];
+	u32 h = matrices[0].h;
+	u32 w = matrices[0].w;
+	u32 h2 = h / downscale_factor;
+	u32 w2 = w / downscale_factor;
+	std::array<Matrix, 4> smaller_matrices{Matrix(w2, h2), Matrix(w2, h2),
+		Matrix(w2, h2), Matrix(w2, h2)};
 	for (int i = 0; i < 4; ++i) {
-		smaller_matrices[i].h = h2;
-		smaller_matrices[i].w = w2;
-		smaller_matrices[i].data = new float[w2 * h2];
-		downscale_perc(&matrices[i], downscale_factor, &smaller_matrices[i]);
+		downscale_perc(matrices[i], downscale_factor, smaller_matrices[i]);
 	}
 	matrices_to_image(smaller_matrices, raw);
-	free_matrices(smaller_matrices);
 }
 
 /*! \brief Function for linearly downscaling a stripe
@@ -326,7 +275,9 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	// put the original texture into a matrix
 	//~ u32 *raw = (u32 *)img->lock(video::ETLM_READ_ONLY, 0);
 	u32 *raw = (u32 *)img->getData();
-	struct matrix *matrices = image_to_matrices(raw, w, h);
+	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
+		Matrix(w, h)};
+	image_to_matrices(raw, matrices);
 
 	int k;
 	// get the total size of all mipmap images in bytes
@@ -340,7 +291,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 			w = 1;
 		total_pixel_cnt += w * h;
 	}
-	u32 *data = new u32[total_pixel_cnt];
+	auto data{std::make_unique<u32[]>(total_pixel_cnt)};
 
 	w = dim.Width;
 	h = dim.Height;
@@ -348,7 +299,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	//~ video::IImage *current_image = (video::IImage *)data
 
 	// generate images
-	u32 *current_image = data;
+	u32 *current_image{data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1)
 			// stripes are downscaled differently (they usually don't appear)
@@ -379,11 +330,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 
 	// create the texture
 	video::ITexture *tex = driver->addTexture(name.c_str(), img);
-	tex->regenerateMipMapLevels(data);
-
-	// clean up memory
-	free_matrices(matrices);
-	delete[] data;
+	tex->regenerateMipMapLevels(data.get());
 
 	return tex;
 }
