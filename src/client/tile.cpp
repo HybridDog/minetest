@@ -649,13 +649,11 @@ u32 TextureSource::generateTexture(const std::string &name)
 	if (img != NULL) {
 		img = Align2Npot2(img, driver);
 		// Create texture from resulting image
-
-
-		// meins
-		tex = add_texture_with_mipmaps(name, img, driver);
-
-
-		//~ tex = driver->addTexture(name.c_str(), img);
+		if (m_setting_mipmap) {
+			tex = add_texture_with_mipmaps(name, *img, *driver);
+		} else {
+			tex = driver->addTexture(name.c_str(), img);
+		}
 		guiScalingCache(io::path(name.c_str()), driver, img);
 		img->drop();
 	}
@@ -856,7 +854,11 @@ void TextureSource::rebuildTexture(video::IVideoDriver *driver, TextureInfo &ti)
 	// Create texture from resulting image
 	video::ITexture *t = NULL;
 	if (img) {
-		t = driver->addTexture(ti.name.c_str(), img);
+		if (m_setting_mipmap) {
+			t = add_texture_with_mipmaps(ti.name, *img, *driver);
+		} else {
+			t = driver->addTexture(ti.name.c_str(), img);
+		}
 		guiScalingCache(io::path(ti.name.c_str()), driver, img);
 		img->drop();
 	}
@@ -1666,7 +1668,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 		}
 		/*
 		[multiply:color
-		or 
+		or
 		[screen:color
 			Multiply and Screen blend modes are basic blend modes for darkening and lightening
 			images, respectively.
@@ -1692,7 +1694,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 			if (!parseColorString(color_str, color, false))
 				return false;
 			if (str_starts_with(part_of_name, "[multiply:")) {
-				apply_multiplication(baseimg, v2u32(0, 0), 
+				apply_multiplication(baseimg, v2u32(0, 0),
 					baseimg->getDimension(), color);
 			} else {
 				apply_screen(baseimg, v2u32(0, 0), baseimg->getDimension(), color);
@@ -1972,7 +1974,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 		}
 		/*
 			[hsl:hue:saturation:lightness
-			or 
+			or
 			[colorizehsl:hue:saturation:lightness
 
 			Adjust the hue, saturation, and lightness of the base image. Like
@@ -1985,7 +1987,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 			will be converted to a grayscale image as though seen through a
 			colored glass, like	"Colorize" in GIMP.
 		*/
-		else if (str_starts_with(part_of_name, "[hsl:") || 
+		else if (str_starts_with(part_of_name, "[hsl:") ||
 		         str_starts_with(part_of_name, "[colorizehsl:")) {
 
 			if (baseimg == nullptr) {
@@ -2002,7 +2004,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 
 			Strfnd sf(part_of_name);
 			sf.next(":");
-			s32 hue = mystoi(sf.next(":"), -180, 360); 
+			s32 hue = mystoi(sf.next(":"), -180, 360);
 			s32 saturation = sf.at_end() ? defaultSaturation : mystoi(sf.next(":"), -100, 1000);
 			s32 lightness  = sf.at_end() ? 0 : mystoi(sf.next(":"), -100, 100);
 
@@ -2012,7 +2014,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 		}
 		/*
 			[overlay:filename
-			or 
+			or
 			[hardlight:filename
 
 			"A.png^[hardlight:B.png" is the same as "B.png^[overlay:A.Png"
@@ -2076,7 +2078,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 			s32 contrast = mystoi(sf.next(":"), -127, 127);
 			s32 brightness = sf.at_end() ? 0 : mystoi(sf.next(":"), -127, 127);
 
-			apply_brightness_contrast(baseimg, v2u32(0, 0), 
+			apply_brightness_contrast(baseimg, v2u32(0, 0),
 				baseimg->getDimension(), brightness, contrast);
 		}
 		else
@@ -2354,14 +2356,14 @@ static void apply_overlay(video::IImage *blend, video::IImage *dst,
 	v2s32 blend_layer_pos = hardlight ? dst_pos : blend_pos;
 	v2s32 base_layer_pos  = hardlight ? blend_pos : dst_pos;
 
-	for (u32 y = 0; y < size.Y; y++) 
+	for (u32 y = 0; y < size.Y; y++)
 	for (u32 x = 0; x < size.X; x++) {
 		s32 base_x = x + base_layer_pos.X;
 		s32 base_y = y + base_layer_pos.Y;
 
 		video::SColor blend_c =
 			blend_layer->getPixel(x + blend_layer_pos.X, y + blend_layer_pos.Y);
-		video::SColor base_c = base_layer->getPixel(base_x, base_y);		
+		video::SColor base_c = base_layer->getPixel(base_x, base_y);
 		double blend_r = blend_c.getRed()   / 255.0;
 		double blend_g = blend_c.getGreen() / 255.0;
 		double blend_b = blend_c.getBlue()  / 255.0;
@@ -2380,7 +2382,7 @@ static void apply_overlay(video::IImage *blend, video::IImage *dst,
 	}
 }
 
-/* 
+/*
 	Adjust the brightness and contrast of the base image.
 
 	Conceptually like GIMP's "Brightness-Contrast" feature but allows brightness to be
@@ -2394,17 +2396,17 @@ static void apply_brightness_contrast(video::IImage *dst, v2u32 dst_pos, v2u32 s
 	// (we could technically allow -128/128 here as that would just result in 0 slope)
 	double norm_c = core::clamp(contrast,   -127, 127) / 128.0;
 	double norm_b = core::clamp(brightness, -127, 127) / 127.0;
-	
+
 	// Scale brightness so its range is -127.5 to 127.5, otherwise brightness
 	// adjustments will outputs values from 0.5 to 254.5 instead of 0 to 255.
 	double scaled_b = brightness * 127.5 / 127;
 
-	// Calculate a contrast slope such that that no colors will get clamped due 
+	// Calculate a contrast slope such that that no colors will get clamped due
 	// to the brightness setting.
 	// This allows the texture modifier to used as a brightness modifier without
 	// the user having to calculate a contrast to avoid clipping at that brightness.
 	double slope = 1 - fabs(norm_b);
-	
+
 	// Apply the user's contrast adjustment to the calculated slope, such that
 	// -127 will make it near-vertical and +127 will make it horizontal
 	double angle = atan(slope);

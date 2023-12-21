@@ -284,24 +284,24 @@ static void downscale_stripe(u32 *longer_stripe, u32 smaller_length,
 
 
 video::ITexture *add_texture_with_mipmaps(const std::string &name,
-	video::IImage *img, video::IVideoDriver *driver)
+	video::IImage &img, video::IVideoDriver &driver)
 {
-	core::dimension2d<u32> dim = img->getDimension();
+	core::dimension2d<u32> dim = img.getDimension();
 	u32 w = dim.Width;
 	u32 h = dim.Height;
 
 	// ensure rgba size
-	if (img->getImageDataSizeInBytes() != w * h * 4)
-		errorstream << "size is " << img->getImageDataSizeInBytes() <<
+	if (img.getImageDataSizeInBytes() != w * h * 4)
+		errorstream << "size is " << img.getImageDataSizeInBytes() <<
 			" but expected " << w*h*4 << std::endl;
-	if (img->getColorFormat() != video::ECF_A8R8G8B8)
+	if (img.getColorFormat() != video::ECF_A8R8G8B8)
 		errorstream << "unexpected colour format" << std::endl;
 	// the bytes are in bgra order (in big endian order)
 
 	// put the original texture into a matrix
 	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
 		Matrix(w, h)};
-	image_to_matrices((u32 *)img->getData(), matrices);
+	image_to_matrices((u32 *)img.getData(), matrices);
 
 	// Get the number of mip map images and their total size in bytes.
 	// Mip maps are generated until the width and height are 1,
@@ -362,7 +362,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	}
 
 	// create the texture
-	video::ITexture *tex = driver->addTexture(name.c_str(), img);
+	video::ITexture *tex{driver.addTexture(name.c_str(), &img)};
 	tex->regenerateMipMapLevels(data.get());
 
 	return tex;
