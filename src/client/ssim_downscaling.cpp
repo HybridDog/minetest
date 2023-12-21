@@ -13,6 +13,9 @@
 #define MAX(V, R) ((V) > (R) ? (V) : (R))
 #define INDEX(X, Y, STRIDE) ((Y) * (STRIDE) + (X))
 
+
+/*! \brief A helper struct to handle 2D floating-point data
+ */
 struct Matrix {
 	u32 w;
 	u32 h;
@@ -24,9 +27,9 @@ struct Matrix {
 	{}
 };
 
-/*! \brief linear to sRGB conversion
+/*! \brief sRGB OETF
  *
- * taken from https://github.com/tobspr/GLSL-Color-Spaces/
+ * Taken from https://github.com/tobspr/GLSL-Color-Spaces/
  */
 f32 linear_to_srgb(f32 v)
 {
@@ -34,6 +37,11 @@ f32 linear_to_srgb(f32 v)
 		return 1.055f * powf(v, 1.0f / 2.4f) - 0.055f;
 	return 12.92f * v;
 }
+
+/*! \brief sRGB EOTF
+ *
+ * Taken from https://github.com/tobspr/GLSL-Color-Spaces/
+ */
 f32 srgb_to_linear(f32 v)
 {
 	if (v > 0.04045f)
@@ -41,11 +49,9 @@ f32 srgb_to_linear(f32 v)
 	return v / 12.92f;
 }
 
-/*! \brief get y, cb and cr values each in [0;1] from u8 r, g and b values
+/*! \brief Convert an 8-bit sRGB colour to floating-point linear YCbCr
  *
- * there's gamma correction,
- * see http://www.ericbrasseur.org/gamma.html?i=1#Assume_a_gamma_of_2.2
- * 0.5 is added to cb and cr to have them in [0;1]
+ * 0.5 is added to Cb and Cr so that they are in [0;1]
  */
 static void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
 {
@@ -57,10 +63,10 @@ static void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
 	cr = (0.5f * r - 0.418688f * g - 0.081312f * b) + 0.5f;
 }
 
-/*! \brief the inverse of the function above
+/*! \brief The inverse of rgb2ycbcr
  *
- * numbers from http://www.equasys.de/colorconversion.html
- * if values are too big or small, they're clamped
+ * The coefficents are from http://www.equasys.de/colorconversion.html.
+ * If RGB values are too big or small, they are clamped.
  */
 static void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
 {
@@ -75,24 +81,26 @@ static void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
 	b_8 = CLAMP(b * 255.0f, 0, 255);
 }
 
-/*! \brief Convert an bgra image to 4 ycbcr matrices with values in [0, 1]
+/*! \brief Convert a BGRA image to four floating-point matrices
+ *
+ * \param raw The 8-bit sRGB BGRA input image data
+ * \param matrices The output matrices for the Y, Cb, Cr and alpha channels
  */
-void image_to_matrices(u32 *raw, std::array<Matrix, 4> &matrices)
+void image_to_matrices(const u32 *raw, std::array<Matrix, 4> &matrices)
 {
 	u32 w = matrices[0].w;
 	u32 h = matrices[0].h;
 	for (u32 i = 0; i < w * h; ++i) {
 		u8 *bgra = (u8 *)&raw[i];
-		// put y, cb, cr and transpatency into the matrices
 		rgb2ycbcr(*(bgra+2), *(bgra+1), *bgra,
 			matrices[0].data[i], matrices[1].data[i], matrices[2].data[i]);
 		matrices[3].data[i] = *(bgra+3) / 255.0f;
 	}
 }
 
-/*! \brief Convert 4 matrices to an bgra image, which is passed
+/*! \brief The inverse of image_to_matrices
  */
-static void matrices_to_image(std::array<Matrix, 4> &matrices, u32 *raw)
+static void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
 {
 	int w = matrices[0].w;
 	int h = matrices[0].h;
@@ -105,12 +113,13 @@ static void matrices_to_image(std::array<Matrix, 4> &matrices, u32 *raw)
 	}
 }
 
-/*! \brief Calculate the downscaled L and L2 for lower resolutions
+/*! \brief Downscale the input and squared input to multiple lower resolutions
  *
  * \param mat The input data
  * \param targets The resolutions and memory for the lower-resolution output
  */
-static void downscale(Matrix &mat, std::vector<std::array<Matrix, 2>> &targets)
+static void downscale(const Matrix &mat,
+	std::vector<std::array<Matrix, 2>> &targets)
 {
 	u32 w{mat.w};
 	u32 h{mat.h};
@@ -154,12 +163,13 @@ static void downscale(Matrix &mat, std::vector<std::array<Matrix, 2>> &targets)
 	}
 }
 
-/*! \brief Use the L and L2 to calculate the perceptually-downscaled output
+/*! \brief Calculate the perceptually-downscaled output using the downscaled
+ * input (L) and downscaled squared input (L2)
  *
  * \param mats The input data L and L2
- * \param target Output
+ * \param target The perceptually-downscaled output
  */
-static void sharpen(std::array<Matrix, 2> &mats, Matrix &target)
+static void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
 {
 	u32 w{mats[0].w};
 	u32 h{mats[0].h};
@@ -222,14 +232,13 @@ static void sharpen(std::array<Matrix, 2> &mats, Matrix &target)
 	}
 }
 
-
-/*! \brief Function which calls functions for downscaling
+/*! \brief Downscale the input and save the result to the mip map texture data
  *
- * \param matrices The content from the original image.
- * \param downscale_factor Must be a natural number.
- * \param raw The place where the downscaled srgb image is saved to.
+ * \param matrices The image channels from the high-resolution texture
+ * \param target_resolutions_perc A list of target resolutions and corresponding
+ *   memory locations for the final BGRA output
  */
-static void downscale_images(std::array<Matrix, 4> &matrices,
+static void downscale_images(const std::array<Matrix, 4> &matrices,
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc)
 {
 	std::array<std::vector<Matrix>, 4> results;
@@ -260,25 +269,24 @@ static void downscale_images(std::array<Matrix, 4> &matrices,
 
 /*! \brief Function for linearly downscaling a stripe
  *
- * TODO: does this function actually work correctly?
- * This also uses gamma correction.
+ * TODO: does this function actually work correctly??
  * If the longer_stripe had an odd length, one pixel is simply ignored.
  */
-static void downscale_stripe(u32 *longer_stripe, u32 smaller_length,
+static void downscale_stripe(const u32 *longer_stripe, u32 smaller_length,
 	u32 *smaller_stripe)
 {
 	// bgra order again
 	for (u32 x = 0; x < smaller_length; ++x) {
-		u8 *bgra_l = (u8 *)&longer_stripe[2 * x];
-		u8 *bgra_r = (u8 *)&longer_stripe[2 * x + 1];
-		u8 *bgra_target = (u8 *)&smaller_stripe[x];
+		u8 *bgra_left{(u8 *)&longer_stripe[2 * x]};
+		u8 *bgra_right{(u8 *)&longer_stripe[2 * x + 1]};
+		u8 *bgra_target{(u8 *)&smaller_stripe[x]};
 		for (int i = 0; i < 3; ++i) {
 			bgra_target[i] = powf(
-				0.5f * (powf(bgra_l[i], 2.2f) + powf(bgra_r[i], 2.2f)),
+				0.5f * (powf(bgra_left[i], 2.2f) + powf(bgra_right[i], 2.2f)),
 				1.0f / 2.2f);
 		}
-		// alpha doesn't need gamma correction (afaIk)
-		bgra_target[3] = 0.5f * (bgra_l[3] + bgra_r[3]);
+		// alpha does not need gamma correction.
+		bgra_target[3] = 0.5f * (bgra_left[3] + bgra_right[3]);
 	}
 }
 
@@ -286,22 +294,16 @@ static void downscale_stripe(u32 *longer_stripe, u32 smaller_length,
 video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	video::IImage &img, video::IVideoDriver &driver)
 {
-	core::dimension2d<u32> dim = img.getDimension();
-	u32 w = dim.Width;
-	u32 h = dim.Height;
+	core::dimension2d<u32> dim{img.getDimension()};
+	u32 w{dim.Width};
+	u32 h{dim.Height};
 
-	// ensure rgba size
-	if (img.getImageDataSizeInBytes() != w * h * 4)
-		errorstream << "size is " << img.getImageDataSizeInBytes() <<
-			" but expected " << w*h*4 << std::endl;
-	if (img.getColorFormat() != video::ECF_A8R8G8B8)
-		errorstream << "unexpected colour format" << std::endl;
-	// the bytes are in bgra order (in big endian order)
-
-	// put the original texture into a matrix
-	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
-		Matrix(w, h)};
-	image_to_matrices((u32 *)img.getData(), matrices);
+	if (img.getColorFormat() != video::ECF_A8R8G8B8
+			|| img.getImageDataSizeInBytes() != w * h * 4) {
+		throw std::runtime_error("\"" + name +
+			"\" is not a valid video::ECF_A8R8G8B8 texture.");
+	}
+	// The bytes are in bgra order (in big endian order)
 
 	// Get the number of mip map images and their total size in bytes.
 	// Mip maps are generated until the width and height are 1,
@@ -322,14 +324,17 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 
 	w = dim.Width;
 	h = dim.Height;
+	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
+		Matrix(w, h)};
+	image_to_matrices((u32 *)img.getData(), matrices);
 
-	// generate images
+	// Collect target resolutons and associated memory locations
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
 	int k;
 	u32 *current_image{data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1) {
-			// stripes are downscaled differently (they usually don't appear)
+			// Stripes are downscaled differently
 			continue;
 		}
 		// Each step the size is halved and floored
@@ -340,16 +345,17 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 				std::array<u32, 2>{w, h}, current_image
 			}
 		);
-		// make current_image point to the next smaller image
+		// Make current_image point to the next smaller image
 		current_image += w * h;
 	}
+
+	// Calculate mip maps (except for stripes)
 	downscale_images(matrices, target_resolutions_perc);
 
-
-	u32 *previous_stripe = current_image - w * h;
-	bool horizontal_stripe = h == 1;
+	// Calculate mip maps for stripes (only if the input image is not a square)
+	u32 *previous_stripe{current_image - w * h};
+	bool horizontal_stripe{h == 1};
 	for (; k < mipmapcnt; ++k) {
-		// stripe downscaling, this only happens for non-square textures
 		w /= 2;
 		h /= 2;
 		if (horizontal_stripe)
@@ -361,7 +367,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		current_image += w * h;
 	}
 
-	// create the texture
+	// Create the irrlicht texture
 	video::ITexture *tex{driver.addTexture(name.c_str(), &img)};
 	tex->regenerateMipMapLevels(data.get());
 
