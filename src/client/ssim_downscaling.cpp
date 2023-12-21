@@ -223,46 +223,44 @@ static void sharpen(std::array<Matrix, 2> &mats, Matrix &target)
 }
 
 
-/*! \brief The actual downscaling algorithm
- *
- * \param mat The 4 matrices obtained form image_to_matrices.
- * \param s The factor by which the image should become downscaled.
- */
-static void downscale_perc(Matrix &mat, int downscale_factor, Matrix &target)
-{
-	u32 h2{mat.h / downscale_factor};
-	u32 w2{mat.w / downscale_factor};
-	std::vector<std::array<Matrix, 2>> downscaleds;
-	downscaleds.emplace_back(std::array<Matrix, 2>{Matrix(w2, h2),
-		Matrix(w2, h2)});
-	downscale(mat, downscaleds);
-
-	sharpen(downscaleds[0], target);
-}
-
 /*! \brief Function which calls functions for downscaling
  *
  * \param matrices The content from the original image.
  * \param downscale_factor Must be a natural number.
  * \param raw The place where the downscaled srgb image is saved to.
  */
-static void downscale_an_image(std::array<Matrix, 4> &matrices,
-	int downscale_factor, u32 *raw)
+static void downscale_images(std::array<Matrix, 4> &matrices,
+	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc)
 {
-	u32 h = matrices[0].h;
-	u32 w = matrices[0].w;
-	u32 h2 = h / downscale_factor;
-	u32 w2 = w / downscale_factor;
-	std::array<Matrix, 4> smaller_matrices{Matrix(w2, h2), Matrix(w2, h2),
-		Matrix(w2, h2), Matrix(w2, h2)};
-	for (int i = 0; i < 4; ++i) {
-		downscale_perc(matrices[i], downscale_factor, smaller_matrices[i]);
+	std::array<std::vector<Matrix>, 4> results;
+	for (int channel{0}; channel < 4; ++channel) {
+		// Allocate the matrices
+		std::vector<std::array<Matrix, 2>> downscaleds;
+		for (const auto &res : target_resolutions_perc) {
+			u32 w{res.first[0]};
+			u32 h{res.first[1]};
+			downscaleds.emplace_back(std::array<Matrix, 2>{Matrix(w, h),
+				Matrix(w, h)});
+			results[channel].emplace_back(Matrix(w, h));
+		}
+		// Perform the downscaling
+		downscale(matrices[channel], downscaleds);
+		for (u32 i{0}; i < target_resolutions_perc.size(); ++i) {
+			sharpen(downscaleds[i], results[channel][i]);
+		}
 	}
-	matrices_to_image(smaller_matrices, raw);
+	// Convert the result back to 8-bit colours
+	for (u32 i{0}; i < target_resolutions_perc.size(); ++i) {
+		std::array<Matrix, 4> smaller_matrices{std::move(results[0][i]),
+			std::move(results[1][i]), std::move(results[2][i]),
+			std::move(results[3][i])};
+		matrices_to_image(smaller_matrices, target_resolutions_perc[i].second);
+	}
 }
 
 /*! \brief Function for linearly downscaling a stripe
  *
+ * TODO: does this function actually work correctly?
  * This also uses gamma correction.
  * If the longer_stripe had an odd length, one pixel is simply ignored.
  */
@@ -325,23 +323,28 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	w = dim.Width;
 	h = dim.Height;
 
-	//~ video::IImage *current_image = (video::IImage *)data
-
 	// generate images
+	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
 	int k;
 	u32 *current_image{data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
-		if (w == 1 || h == 1)
+		if (w == 1 || h == 1) {
 			// stripes are downscaled differently (they usually don't appear)
-			break;
+			continue;
+		}
+		// Each step the size is halved and floored
 		w /= 2;
 		h /= 2;
-		// each step the size is halved and floored
-		int downscaling_factor = 1 << (k+1);
-		downscale_an_image(matrices, downscaling_factor, current_image);
+		target_resolutions_perc.emplace_back(
+			std::pair<std::array<u32, 2>, u32*>{
+				std::array<u32, 2>{w, h}, current_image
+			}
+		);
 		// make current_image point to the next smaller image
 		current_image += w * h;
 	}
+	downscale_images(matrices, target_resolutions_perc);
+
 
 	u32 *previous_stripe = current_image - w * h;
 	bool horizontal_stripe = h == 1;
