@@ -105,100 +105,114 @@ static void matrices_to_image(std::array<Matrix, 4> &matrices, u32 *raw)
 	}
 }
 
-
-/*! \brief The actual downscaling algorithm
+/*! \brief Calculate the downscaled L and L2 for lower resolutions
  *
- * \param mat The 4 matrices obtained form image_to_matrices.
- * \param s The factor by which the image should become downscaled.
+ * \param mat The input data
+ * \param targets The resolutions and memory for the lower-resolution output
  */
-static void downscale_perc(Matrix &mat, int s, Matrix &target)
+static void downscale(Matrix &mat, std::vector<std::array<Matrix, 2>> &targets)
 {
-	// preparation
-	int w = mat.w; // input width
-	int h = mat.h;
-	auto &input{mat.data};
-	int w2 = w / s; // output width
-	int h2 = h / s;
-	int input_size = w * h * sizeof(f32);
-	int output_size = input_size / (s * s);
-	//~ fprintf(stderr, "w, h, s: %d, %d, %d\n", w,h,s);
-	auto l{std::make_unique<f32[]>(output_size)};
-	auto l2{std::make_unique<f32[]>(output_size)};
-	auto m_all{std::make_unique<f32[]>(output_size)};
-	auto r_all{std::make_unique<f32[]>(output_size)};
-	auto &d{target.data};
-
-	// get l and l2, the input image and it's size are used only here
-	f32 divider_s = 1.0f / (s * s);
-	for (int y_start = 0; y_start < h2; ++y_start) {
-		for (int x_start = 0; x_start < w2; ++x_start) {
-			// x_start and y_start are coordinates for the subsampled image
-			int x = x_start * s;
-			int y = y_start * s;
-			f32 acc = 0;
-			f32 acc2 = 0;
-			for (int yc = y; yc < y + s; ++yc) {
-				for (int xc = x; xc < x + s; ++xc) {
-					// xc, yc are always inside bounds
-					f32 v = input[INDEX(xc, yc, w)];
-					acc += v;
-					acc2 += v * v;
-				}
-			}
-			int i = INDEX(x_start, y_start, w2);
-			l[i] = acc * divider_s;
-			l2[i] = acc2 * divider_s;
-		}
+	u32 w{mat.w};
+	u32 h{mat.h};
+	u32 input_size{w * h};
+	f32 *l{mat.data.get()};
+	auto l2_init{std::make_unique<f32[]>(input_size)};
+	f32 *l2{l2_init.get()};
+	for (u32 i{0}; i < input_size; ++i) {
+		l2[i] = l[i] * l[i];
 	}
+	for (auto &mats_smaller : targets) {
+		Matrix &mat_smaller_l{mats_smaller[0]};
+		Matrix &mat_smaller_l2{mats_smaller[1]};
+		u32 w2{mat_smaller_l.w};
+		u32 h2{mat_smaller_l.h};
+		u32 scaling_w{w / w2};
+		u32 scaling_h{h / h2};
+		f32 divider_s = 1.0f / (scaling_w * scaling_h);
+		for (u32 y_small{0}; y_small < h2; ++y_small) {
+			for (u32 x_small{0}; x_small < w2; ++x_small) {
+				f32 acc_l{0};
+				f32 acc_l2{0};
+				u32 x{x_small * scaling_w};
+				u32 y{y_small * scaling_h};
+				for (u32 yc = y; yc < y + scaling_h; ++yc) {
+					for (u32 xc = x; xc < x + scaling_w; ++xc) {
+						u32 vi{INDEX(xc % w, yc % h, w)};
+						acc_l += l[vi];
+						acc_l2 += l2[vi];
+					}
+				}
+				u32 vi{INDEX(x_small, y_small, w2)};
+				mat_smaller_l.data[vi] = acc_l * divider_s;
+				mat_smaller_l2.data[vi] = acc_l2 * divider_s;
+			}
+		}
+		w = w2;
+		h = h2;
+		l = mat_smaller_l.data.get();
+		l2 = mat_smaller_l2.data.get();
+	}
+}
+
+/*! \brief Use the L and L2 to calculate the perceptually-downscaled output
+ *
+ * \param mats The input data L and L2
+ * \param target Output
+ */
+static void sharpen(std::array<Matrix, 2> &mats, Matrix &target)
+{
+	u32 w{mats[0].w};
+	u32 h{mats[0].h};
+	auto &l{mats[0].data};
+	auto &l2{mats[1].data};
+	auto m_all{std::make_unique<f32[]>(w * h)};
+	auto r_all{std::make_unique<f32[]>(w * h)};
+	auto &d{target.data};
 
 	f32 patch_sz_div = 1.0f / (SQR_NP * SQR_NP);
 
 	// Calculate m and r for all patch offsets
-	for (int y_start = 0; y_start < h2; ++y_start) {
-		for (int x_start = 0; x_start < w2; ++x_start) {
-			f32 acc_m = 0;
-			f32 acc_r_1 = 0;
-			f32 acc_r_2 = 0;
-			for (int y = y_start; y < y_start + SQR_NP; ++y) {
-				for (int x = x_start; x < x_start + SQR_NP; ++x) {
-					int xi = x;
-					int yi = y;
-					xi = xi % w2;
-					yi = yi % h2;
-					int i = INDEX(xi, yi, w2);
+	for (u32 y_start{0}; y_start < h; ++y_start) {
+		for (u32 x_start{0}; x_start < w; ++x_start) {
+			f32 acc_m{0};
+			f32 acc_r_1{0};
+			f32 acc_r_2{0};
+			for (u32 y{y_start}; y < y_start + SQR_NP; ++y) {
+				for (u32 x{x_start}; x < x_start + SQR_NP; ++x) {
+					u32 i{INDEX(x % w, y % h, w)};
 					acc_m += l[i];
 					acc_r_1 += l[i] * l[i];
 					acc_r_2 += l2[i];
 				}
 			}
-			f32 mv = acc_m * patch_sz_div;
-			f32 slv = acc_r_1 * patch_sz_div - mv * mv;
-			f32 shv = acc_r_2 * patch_sz_div - mv * mv;
-			int i = INDEX(x_start, y_start, w2);
+			f32 mv{acc_m * patch_sz_div};
+			f32 slv{acc_r_1 * patch_sz_div - mv * mv};
+			f32 shv{acc_r_2 * patch_sz_div - mv * mv};
+			u32 i{INDEX(x_start, y_start, w)};
 			m_all[i] = mv;
 			if (slv >= 0.000001f) // epsilon is 10⁻⁶
 				r_all[i] = sqrtf(shv / slv);
 			else
-				r_all[i] = 2.0f;
+				r_all[i] = 1.0f;
 		}
 	}
 
 	// Calculate the average of the results of all possible patch sets
 	// d is the output
-	for (int y = 0; y < h2; ++y) {
-		for (int x = 0; x < w2; ++x) {
-			int i = INDEX(x, y, w2);
-			f32 liner_scaled = l[i];
-			f32 acc_d = 0;
-			for (int y_offset = 0; y_offset > -SQR_NP; --y_offset) {
-				for (int x_offset = 0; x_offset > -SQR_NP; --x_offset) {
-					int x_patch_off = x + x_offset;
-					int y_patch_off = y + y_offset;
-					x_patch_off = (x_patch_off + w2) % w2;
-					y_patch_off = (y_patch_off + h2) % h2;
-					int i_patch_off = INDEX(x_patch_off, y_patch_off, w2);
-					f32 mv = m_all[i_patch_off];
-					f32 rv = r_all[i_patch_off];
+	for (u32 y{0}; y < h; ++y) {
+		for (u32 x{0}; x < w; ++x) {
+			u32 i{INDEX(x, y, w)};
+			f32 liner_scaled{l[i]};
+			f32 acc_d{0};
+			for (int y_offset{0}; y_offset > -SQR_NP; --y_offset) {
+				for (int x_offset{0}; x_offset > -SQR_NP; --x_offset) {
+					int x_patch_off{static_cast<int>(x) + x_offset};
+					int y_patch_off{static_cast<int>(y) + y_offset};
+					x_patch_off = (x_patch_off + w) % w;
+					y_patch_off = (y_patch_off + h) % h;
+					u32 i_patch_off{INDEX(x_patch_off, y_patch_off, w)};
+					f32 mv{m_all[i_patch_off]};
+					f32 rv{r_all[i_patch_off]};
 					acc_d += mv + rv * liner_scaled - rv * mv;
 				}
 			}
@@ -206,6 +220,24 @@ static void downscale_perc(Matrix &mat, int s, Matrix &target)
 				+ acc_d * patch_sz_div * (1.0f - LINEAR_RATIO);
 		}
 	}
+}
+
+
+/*! \brief The actual downscaling algorithm
+ *
+ * \param mat The 4 matrices obtained form image_to_matrices.
+ * \param s The factor by which the image should become downscaled.
+ */
+static void downscale_perc(Matrix &mat, int downscale_factor, Matrix &target)
+{
+	u32 h2{mat.h / downscale_factor};
+	u32 w2{mat.w / downscale_factor};
+	std::vector<std::array<Matrix, 2>> downscaleds;
+	downscaleds.emplace_back(std::array<Matrix, 2>{Matrix(w2, h2),
+		Matrix(w2, h2)});
+	downscale(mat, downscaleds);
+
+	sharpen(downscaleds[0], target);
 }
 
 /*! \brief Function which calls functions for downscaling
@@ -260,10 +292,6 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	u32 w = dim.Width;
 	u32 h = dim.Height;
 
-	// mipmaps are generated until width and height are 1,
-	// see https://git.io/vNgmX
-	int mipmapcnt = MYMAX(ceil(logf(w) / logf(2)), ceil(logf(h) / logf(2)));
-
 	// ensure rgba size
 	if (img->getImageDataSizeInBytes() != w * h * 4)
 		errorstream << "size is " << img->getImageDataSizeInBytes() <<
@@ -273,16 +301,16 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	// the bytes are in bgra order (in big endian order)
 
 	// put the original texture into a matrix
-	//~ u32 *raw = (u32 *)img->lock(video::ETLM_READ_ONLY, 0);
-	u32 *raw = (u32 *)img->getData();
 	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
 		Matrix(w, h)};
-	image_to_matrices(raw, matrices);
+	image_to_matrices((u32 *)img->getData(), matrices);
 
-	int k;
-	// get the total size of all mipmap images in bytes
-	int total_pixel_cnt = 0;
-	for (k = 0; k < mipmapcnt; ++k) {
+	// Get the number of mip map images and their total size in bytes.
+	// Mip maps are generated until the width and height are 1,
+	// see https://git.io/vNgmX
+	int total_pixel_cnt{0};
+	int mipmapcnt{0};
+	while (w > 1 || h > 1) {
 		w /= 2;
 		h /= 2;
 		if (h == 0)
@@ -290,6 +318,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		else if (w == 0)
 			w = 1;
 		total_pixel_cnt += w * h;
+		++mipmapcnt;
 	}
 	auto data{std::make_unique<u32[]>(total_pixel_cnt)};
 
@@ -299,6 +328,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	//~ video::IImage *current_image = (video::IImage *)data
 
 	// generate images
+	int k;
 	u32 *current_image{data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1)
