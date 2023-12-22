@@ -1,8 +1,26 @@
-// https://forum.minetest.net/viewtopic.php?p=308356#p308356
+/*
+Minetest
+Copyright (C) 2023 HybridDog
 
-#include "ssim_downscaling.h"
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation; either version 2.1 of the License, or
+(at your option) any later version.
 
-#include "log.h"
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+#include "mipmap_generation.h"
+
+#include <array>
+#include <memory>
 
 #define SQR_NP 2 // squareroot of the patch size, recommended: 2
 #define LINEAR_RATIO 0.5f // used for mixing in linear downscaled values
@@ -233,6 +251,9 @@ static void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
 }
 
 /*! \brief Downscale the input and save the result to the mip map texture data
+ *
+ * The downscaling algorithm is based on "Perceptually Based Downscaling of
+ * Images" by A. Cengiz Öztireli and Markus Gross.
  *
  * \param matrices The image channels from the high-resolution texture
  * \param target_resolutions_perc A list of target resolutions and corresponding

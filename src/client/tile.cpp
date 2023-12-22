@@ -32,7 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/strfnd.h"
 #include "imagefilters.h"
 #include "guiscalingfilter.h"
-#include "ssim_downscaling.h"
+#include "mipmap_generation.h"
 #include "renderingengine.h"
 #include "util/base64.h"
 
