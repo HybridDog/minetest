@@ -435,7 +435,8 @@ private:
 	std::unordered_map<std::string, Palette> m_palettes;
 
 	// Cached settings needed for making textures from meshes
-	bool m_setting_mipmap;
+	bool m_setting_mipmap_enabled;
+	bool m_setting_mipmap_sharp;
 	bool m_setting_trilinear_filter;
 	bool m_setting_bilinear_filter;
 	bool m_setting_anisotropic_filter;
@@ -457,7 +458,9 @@ TextureSource::TextureSource()
 	// Cache some settings
 	// Note: Since this is only done once, the game must be restarted
 	// for these settings to take effect
-	m_setting_mipmap = g_settings->getBool("mip_map");
+	std::string mip_map{g_settings->get("mip_map")};
+	m_setting_mipmap_enabled = mip_map != "off";
+	m_setting_mipmap_sharp = mip_map == "sharp";
 	m_setting_trilinear_filter = g_settings->getBool("trilinear_filter");
 	m_setting_bilinear_filter = g_settings->getBool("bilinear_filter");
 	m_setting_anisotropic_filter = g_settings->getBool("anisotropic_filter");
@@ -649,7 +652,7 @@ u32 TextureSource::generateTexture(const std::string &name)
 	if (img != NULL) {
 		img = Align2Npot2(img, driver);
 		// Create texture from resulting image
-		if (m_setting_mipmap) {
+		if (m_setting_mipmap_sharp) {
 			tex = add_texture_with_mipmaps(name, *img, *driver);
 		} else {
 			tex = driver->addTexture(name.c_str(), img);
@@ -710,7 +713,7 @@ video::ITexture* TextureSource::getTextureForMesh(const std::string &name, u32 *
 {
 	// Avoid duplicating texture if it won't actually change
 	const bool filter_needed =
-		m_setting_mipmap || m_setting_trilinear_filter ||
+		m_setting_mipmap_enabled || m_setting_trilinear_filter ||
 		m_setting_bilinear_filter || m_setting_anisotropic_filter;
 	if (filter_needed)
 		return getTexture(name + "^[applyfiltersformesh", id);
@@ -854,7 +857,7 @@ void TextureSource::rebuildTexture(video::IVideoDriver *driver, TextureInfo &ti)
 	// Create texture from resulting image
 	video::ITexture *t = NULL;
 	if (img) {
-		if (m_setting_mipmap) {
+		if (m_setting_mipmap_sharp) {
 			t = add_texture_with_mipmaps(ti.name, *img, *driver);
 		} else {
 			t = driver->addTexture(ti.name.c_str(), img);
@@ -1751,7 +1754,7 @@ bool TextureSource::generateImagePart(std::string part_of_name,
 			}
 
 			// Apply the "clean transparent" filter, if needed
-			if (m_setting_mipmap || m_setting_bilinear_filter ||
+			if (m_setting_mipmap_enabled || m_setting_bilinear_filter ||
 				m_setting_trilinear_filter || m_setting_anisotropic_filter)
 				imageCleanTransparent(baseimg, 127);
 
