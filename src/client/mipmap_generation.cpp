@@ -32,6 +32,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define INDEX(X, Y, STRIDE) ((Y) * (STRIDE) + (X))
 
 
+namespace {
+
 /*! \brief A helper struct to handle 2D floating-point data
  */
 struct Matrix {
@@ -41,7 +43,7 @@ struct Matrix {
 	Matrix(u32 width, u32 height):
 		w{width},
 		h{height},
-		data{std::make_unique<f32[]>(width * height)}
+		data{std::unique_ptr<f32[]>{new f32[width * height]}}
 	{}
 };
 
@@ -71,7 +73,7 @@ f32 srgb_to_linear(f32 v)
  *
  * 0.5 is added to Cb and Cr so that they are in [0;1]
  */
-static void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
+void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
 {
 	f32 r = srgb_to_linear(r_8 / 255.0f);
 	f32 g = srgb_to_linear(g_8 / 255.0f);
@@ -86,7 +88,7 @@ static void rgb2ycbcr(u8 r_8, u8 g_8, u8 b_8, f32 &y, f32 &cb, f32 &cr)
  * The coefficents are from http://www.equasys.de/colorconversion.html.
  * If RGB values are too big or small, they are clamped.
  */
-static void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
+void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
 {
 	f32 r = (y + 1.402f * (cr - 0.5f));
 	f32 g = (y - 0.344136f * (cb - 0.5f) - 0.714136f * (cr - 0.5f));
@@ -118,7 +120,7 @@ void image_to_matrices(const u32 *raw, std::array<Matrix, 4> &matrices)
 
 /*! \brief The inverse of image_to_matrices
  */
-static void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
+void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
 {
 	int w = matrices[0].w;
 	int h = matrices[0].h;
@@ -136,14 +138,14 @@ static void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
  * \param mat The input data
  * \param targets The resolutions and memory for the lower-resolution output
  */
-static void downscale(const Matrix &mat,
+void downscale(const Matrix &mat,
 	std::vector<std::array<Matrix, 2>> &targets)
 {
 	u32 w{mat.w};
 	u32 h{mat.h};
 	u32 input_size{w * h};
 	f32 *l{mat.data.get()};
-	auto l2_init{std::make_unique<f32[]>(input_size)};
+	std::unique_ptr<f32[]> l2_init{new f32[input_size]};
 	f32 *l2{l2_init.get()};
 	for (u32 i{0}; i < input_size; ++i) {
 		l2[i] = l[i] * l[i];
@@ -187,14 +189,14 @@ static void downscale(const Matrix &mat,
  * \param mats The input data L and L2
  * \param target The perceptually-downscaled output
  */
-static void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
+void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
 {
 	u32 w{mats[0].w};
 	u32 h{mats[0].h};
 	auto &l{mats[0].data};
 	auto &l2{mats[1].data};
-	auto m_all{std::make_unique<f32[]>(w * h)};
-	auto r_all{std::make_unique<f32[]>(w * h)};
+	std::unique_ptr<f32[]> m_all{new f32[w * h]};
+	std::unique_ptr<f32[]> r_all{new f32[w * h]};
 	auto &d{target.data};
 
 	f32 patch_sz_div = 1.0f / (SQR_NP * SQR_NP);
@@ -259,7 +261,7 @@ static void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
  * \param target_resolutions_perc A list of target resolutions and corresponding
  *   memory locations for the final BGRA output
  */
-static void downscale_images(const std::array<Matrix, 4> &matrices,
+void downscale_images(const std::array<Matrix, 4> &matrices,
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc)
 {
 	std::array<std::vector<Matrix>, 4> results;
@@ -293,7 +295,7 @@ static void downscale_images(const std::array<Matrix, 4> &matrices,
  * TODO: does this function actually work correctly??
  * If the longer_stripe had an odd length, one pixel is simply ignored.
  */
-static void downscale_stripe(const u32 *longer_stripe, u32 smaller_length,
+void downscale_stripe(const u32 *longer_stripe, u32 smaller_length,
 	u32 *smaller_stripe)
 {
 	// bgra order again
@@ -310,6 +312,8 @@ static void downscale_stripe(const u32 *longer_stripe, u32 smaller_length,
 		bgra_target[3] = 0.5f * (bgra_left[3] + bgra_right[3]);
 	}
 }
+
+}  // namespace
 
 
 video::ITexture *add_texture_with_mipmaps(const std::string &name,
@@ -332,16 +336,12 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	int total_pixel_cnt{0};
 	int mipmapcnt{0};
 	while (w > 1 || h > 1) {
-		w /= 2;
-		h /= 2;
-		if (h == 0)
-			h = 1;
-		else if (w == 0)
-			w = 1;
+		w = MAX(w / 2, 1);
+		h = MAX(h / 2, 1);
 		total_pixel_cnt += w * h;
 		++mipmapcnt;
 	}
-	auto data{std::make_unique<u32[]>(total_pixel_cnt)};
+	std::unique_ptr<u32[]> data{new u32[total_pixel_cnt]};
 
 	w = dim.Width;
 	h = dim.Height;
@@ -377,12 +377,10 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	u32 *previous_stripe{current_image - w * h};
 	bool horizontal_stripe{h == 1};
 	for (; k < mipmapcnt; ++k) {
-		w /= 2;
-		h /= 2;
 		if (horizontal_stripe)
-			h = 1;
+			w /= 2;
 		else
-			w = 1;
+			h /= 2;
 		downscale_stripe(previous_stripe, w * h, current_image);
 		previous_stripe = current_image;
 		current_image += w * h;
