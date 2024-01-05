@@ -292,24 +292,31 @@ void downscale_images(const std::array<Matrix, 4> &matrices,
 
 /*! \brief Function for linearly downscaling a stripe
  *
- * TODO: does this function actually work correctly??
- * If the longer_stripe had an odd length, one pixel is simply ignored.
+ * \param parent_stripe Pointer to the BGRA data of the parent texture
+ * \param parent_stripe_len Size of the parent texture, whose resolution is
+ *   either 1 x parent_stripe_len or parent_stripe_len x 1 since it is a stripe
+ * \param target_stripe Pointer to BGRA data where the downscaled stripe is
+ *   saved
  */
-void downscale_stripe(const u32 *longer_stripe, u32 smaller_length,
-	u32 *smaller_stripe)
+void downscale_stripe(const u32 *parent_stripe, u32 parent_stripe_len,
+	u32 *target_stripe)
 {
-	// bgra order again
-	for (u32 x = 0; x < smaller_length; ++x) {
-		u8 *bgra_left{(u8 *)&longer_stripe[2 * x]};
-		u8 *bgra_right{(u8 *)&longer_stripe[2 * x + 1]};
-		u8 *bgra_target{(u8 *)&smaller_stripe[x]};
-		for (int i = 0; i < 3; ++i) {
-			bgra_target[i] = powf(
-				0.5f * (powf(bgra_left[i], 2.2f) + powf(bgra_right[i], 2.2f)),
-				1.0f / 2.2f);
+	// If parent_stripe_len is odd, we ignore the last pixel in the parent
+	// stripe.
+	for (u32 x{0}; x < parent_stripe_len / 2; ++x) {
+		const u8 *bgra1{reinterpret_cast<const u8 *>(parent_stripe + 2 * x)};
+		const u8 *bgra2{reinterpret_cast<const u8 *>(
+			parent_stripe + 2 * x + 1)};
+		u8 *bgra_target{reinterpret_cast<u8 *>(target_stripe + x)};
+		// Average the colours from the two pixels in the linearised sRGB colour
+		// space
+		for (u8 i{0}; i < 3; ++i) {
+			f32 v1{srgb_to_linear(bgra1[i] / 255.0f)};
+			f32 v2{srgb_to_linear(bgra2[i] / 255.0f)};
+			bgra_target[i] = linear_to_srgb(0.5f * (v1 + v2)) * 255.0f;
 		}
-		// alpha does not need gamma correction.
-		bgra_target[3] = 0.5f * (bgra_left[3] + bgra_right[3]);
+		// Average the alpha value from the left and right pixel
+		bgra_target[3] = (static_cast<u16>(bgra1[3]) + bgra2[3]) / 2;
 	}
 }
 
@@ -341,54 +348,57 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		total_pixel_cnt += w * h;
 		++mipmapcnt;
 	}
-	std::unique_ptr<u32[]> data{new u32[total_pixel_cnt]};
+	std::unique_ptr<u32[]> new_img_data{new u32[total_pixel_cnt]};
 
 	w = dim.Width;
 	h = dim.Height;
 	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
 		Matrix(w, h)};
-	image_to_matrices((u32 *)img.getData(), matrices);
+	image_to_matrices(static_cast<u32 *>(img.getData()), matrices);
 
 	// Collect target resolutons and associated memory locations
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
 	int k;
-	u32 *current_image{data.get()};
+	u32 *current_target{new_img_data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1) {
 			// Stripes are downscaled differently
-			continue;
+			break;
 		}
 		// Each step the size is halved and floored
 		w /= 2;
 		h /= 2;
 		target_resolutions_perc.emplace_back(
 			std::pair<std::array<u32, 2>, u32*>{
-				std::array<u32, 2>{w, h}, current_image
+				std::array<u32, 2>{w, h}, current_target
 			}
 		);
-		// Make current_image point to the next smaller image
-		current_image += w * h;
+		// Make current_target point to the next smaller image
+		current_target += w * h;
 	}
 
 	// Calculate mip maps (except for stripes)
 	downscale_images(matrices, target_resolutions_perc);
 
 	// Calculate mip maps for stripes (only if the input image is not a square)
-	u32 *previous_stripe{current_image - w * h};
+	u32 *previous_stripe{current_target - w * h};
+	if (k == 0)
+		previous_stripe = static_cast<u32 *>(img.getData());
 	bool horizontal_stripe{h == 1};
 	for (; k < mipmapcnt; ++k) {
+		u32 parent_stripe_len{w * h};
+		downscale_stripe(previous_stripe, parent_stripe_len, current_target);
+		previous_stripe = current_target;
 		if (horizontal_stripe)
 			w /= 2;
 		else
 			h /= 2;
-		downscale_stripe(previous_stripe, w * h, current_image);
-		previous_stripe = current_image;
-		current_image += w * h;
+		current_target += w * h;
 	}
 
 	// Create the irrlicht texture
 	video::ITexture *tex{driver.addTexture(name.c_str(), &img)};
-	tex->regenerateMipMapLevels(data.get());
+	tex->regenerateMipMapLevels(new_img_data.get());
 
 	return tex;
 }
