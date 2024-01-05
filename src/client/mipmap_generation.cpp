@@ -333,7 +333,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	// Get the number of mip map images and their total size in bytes.
 	// Mip maps are generated until the width and height are 1,
 	// see https://git.io/vNgmX
-	int total_pixel_cnt{0};
+	u32 total_pixel_cnt{0};
 	int mipmapcnt{0};
 	while (w > 1 || h > 1) {
 		w = MAX(w / 2, 1);
@@ -343,12 +343,24 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	}
 	std::unique_ptr<u32[]> data{new u32[total_pixel_cnt]};
 
+	/*
 	w = dim.Width;
 	h = dim.Height;
 	std::array<Matrix, 4> matrices{Matrix(w, h), Matrix(w, h), Matrix(w, h),
 		Matrix(w, h)};
 	image_to_matrices((u32 *)img.getData(), matrices);
+	*/
 
+	// Set each pixel in each mip map to cyan
+	for (u32 x{0}; x < total_pixel_cnt; ++x) {
+		u8 *bgra{reinterpret_cast<u8 *>(&data.get()[x])};
+		bgra[0] = 0xff;
+		bgra[1] = 0xff;
+		bgra[2] = 0x00;
+		bgra[3] = 0xff;
+	}
+
+/*
 	// Collect target resolutons and associated memory locations
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
 	int k;
@@ -385,6 +397,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		previous_stripe = current_image;
 		current_image += w * h;
 	}
+	*/
 
 	// Create the irrlicht texture
 	video::ITexture *tex{driver.addTexture(name.c_str(), &img)};
