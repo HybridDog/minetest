@@ -382,7 +382,9 @@ enable_3d_clouds (3D clouds) bool true
 [**Filtering and Antialiasing]
 
 #    Use mipmaps when scaling textures. May slightly increase performance,
-#    especially when using a high-resolution texture pack.
+#    especially when using a high-resolution texture pack or a high
+#    texture_min_size setting. It may also increase join times if textures are
+#    large.
 #
 #    * off    - Disable mipmapping (default)
 #
