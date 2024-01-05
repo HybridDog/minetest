@@ -22,8 +22,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <array>
 #include <memory>
 
-#define SQR_NP 2 // squareroot of the patch size, recommended: 2
-#define LINEAR_RATIO 0.5f // used for mixing in linear downscaled values
+// Square root of the patch size; recommended: 2
+constexpr u8 SQR_NP{2};
+// Mixing ratio between simple averaging and perceptual downscaling
+constexpr f32 LINEAR_RATIO{0.5f};
 
 
 #define CLAMP(V, A, B) (V) < (A) ? (A) : (V) > (B) ? (B) : (V)
@@ -108,10 +110,10 @@ void ycbcr2rgb(f32 y, f32 cb, f32 cr, u8 &r_8, u8 &g_8, u8 &b_8)
  */
 void image_to_matrices(const u32 *raw, std::array<Matrix, 4> &matrices)
 {
-	u32 w = matrices[0].w;
-	u32 h = matrices[0].h;
+	u32 w{matrices[0].w};
+	u32 h{matrices[0].h};
 	for (u32 i = 0; i < w * h; ++i) {
-		u8 *bgra = (u8 *)&raw[i];
+		const u8 *bgra{reinterpret_cast<const u8 *>(&raw[i])};
 		rgb2ycbcr(*(bgra+2), *(bgra+1), *bgra,
 			matrices[0].data[i], matrices[1].data[i], matrices[2].data[i]);
 		matrices[3].data[i] = *(bgra+3) / 255.0f;
@@ -122,14 +124,14 @@ void image_to_matrices(const u32 *raw, std::array<Matrix, 4> &matrices)
  */
 void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
 {
-	int w = matrices[0].w;
-	int h = matrices[0].h;
-	for (int i = 0; i < w * h; ++i) {
-		u8 *bgra = (u8 *)&raw[i];
+	u32 w{matrices[0].w};
+	u32 h{matrices[0].h};
+	for (u32 i{0}; i < w * h; ++i) {
+		u8 *bgra{reinterpret_cast<u8 *>(&raw[i])};
 		ycbcr2rgb(matrices[0].data[i], matrices[1].data[i], matrices[2].data[i],
 			*(bgra+2), *(bgra+1), *bgra);
-		float a = matrices[3].data[i] * 255;
-		*(bgra+3) = CLAMP(a, 0, 255);
+		f32 alpha{matrices[3].data[i] * 255};
+		*(bgra+3) = CLAMP(alpha, 0, 255);
 	}
 }
 
@@ -234,10 +236,10 @@ void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
 			u32 i{INDEX(x, y, w)};
 			f32 liner_scaled{l[i]};
 			f32 acc_d{0};
-			for (int y_offset{0}; y_offset > -SQR_NP; --y_offset) {
-				for (int x_offset{0}; x_offset > -SQR_NP; --x_offset) {
-					int x_patch_off{static_cast<int>(x) + x_offset};
-					int y_patch_off{static_cast<int>(y) + y_offset};
+			for (s32 y_offset{0}; y_offset > -SQR_NP; --y_offset) {
+				for (s32 x_offset{0}; x_offset > -SQR_NP; --x_offset) {
+					s32 x_patch_off{static_cast<s32>(x) + x_offset};
+					s32 y_patch_off{static_cast<s32>(y) + y_offset};
 					x_patch_off = (x_patch_off + w) % w;
 					y_patch_off = (y_patch_off + h) % h;
 					u32 i_patch_off{INDEX(x_patch_off, y_patch_off, w)};
@@ -265,7 +267,7 @@ void downscale_images(const std::array<Matrix, 4> &matrices,
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc)
 {
 	std::array<std::vector<Matrix>, 4> results;
-	for (int channel{0}; channel < 4; ++channel) {
+	for (u8 channel{0}; channel < 4; ++channel) {
 		// Allocate the matrices
 		std::vector<std::array<Matrix, 2>> downscaleds;
 		for (const auto &res : target_resolutions_perc) {
@@ -273,7 +275,7 @@ void downscale_images(const std::array<Matrix, 4> &matrices,
 			u32 h{res.first[1]};
 			downscaleds.emplace_back(std::array<Matrix, 2>{Matrix(w, h),
 				Matrix(w, h)});
-			results[channel].emplace_back(Matrix(w, h));
+			results[channel].emplace_back(w, h);
 		}
 		// Perform the downscaling
 		downscale(matrices[channel], downscaleds);
@@ -340,8 +342,8 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	// Get the number of mip map images and their total size in bytes.
 	// Mip maps are generated until the width and height are 1,
 	// see https://git.io/vNgmX
-	int total_pixel_cnt{0};
-	int mipmapcnt{0};
+	u32 total_pixel_cnt{0};
+	u8 mipmapcnt{0};
 	while (w > 1 || h > 1) {
 		w = MAX(w / 2, 1);
 		h = MAX(h / 2, 1);
@@ -358,7 +360,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 
 	// Collect target resolutons and associated memory locations
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
-	int k;
+	u8 k;
 	u32 *current_target{new_img_data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1) {
@@ -368,11 +370,8 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		// Each step the size is halved and floored
 		w /= 2;
 		h /= 2;
-		target_resolutions_perc.emplace_back(
-			std::pair<std::array<u32, 2>, u32*>{
-				std::array<u32, 2>{w, h}, current_target
-			}
-		);
+		target_resolutions_perc.emplace_back(std::array<u32, 2>{w, h},
+			current_target);
 		// Make current_target point to the next smaller image
 		current_target += w * h;
 	}
