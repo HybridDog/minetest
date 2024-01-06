@@ -141,20 +141,20 @@ void matrices_to_image(const std::array<Matrix, 4> &matrices, u32 *raw)
  * \param targets The resolutions and memory for the lower-resolution output
  */
 void downscale(const Matrix &mat,
-	std::vector<std::array<Matrix, 2>> &targets)
+	const std::vector<std::array<Matrix, 2>> &targets)
 {
 	u32 w{mat.w};
 	u32 h{mat.h};
 	u32 input_size{w * h};
-	f32 *l{mat.data.get()};
+	const f32 *l{mat.data.get()};
 	std::unique_ptr<f32[]> l2_init{new f32[input_size]};
 	f32 *l2{l2_init.get()};
 	for (u32 i{0}; i < input_size; ++i) {
 		l2[i] = l[i] * l[i];
 	}
-	for (auto &mats_smaller : targets) {
-		Matrix &mat_smaller_l{mats_smaller[0]};
-		Matrix &mat_smaller_l2{mats_smaller[1]};
+	for (const auto &mats_smaller : targets) {
+		const Matrix &mat_smaller_l{mats_smaller[0]};
+		const Matrix &mat_smaller_l2{mats_smaller[1]};
 		u32 w2{mat_smaller_l.w};
 		u32 h2{mat_smaller_l.h};
 		u32 scaling_w{w / w2};
@@ -195,8 +195,8 @@ void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
 {
 	u32 w{mats[0].w};
 	u32 h{mats[0].h};
-	auto &l{mats[0].data};
-	auto &l2{mats[1].data};
+	const auto &l{mats[0].data};
+	const auto &l2{mats[1].data};
 	std::unique_ptr<f32[]> m_all{new f32[w * h]};
 	std::unique_ptr<f32[]> r_all{new f32[w * h]};
 	auto &d{target.data};
@@ -264,7 +264,8 @@ void sharpen(const std::array<Matrix, 2> &mats, Matrix &target)
  *   memory locations for the final BGRA output
  */
 void downscale_images(const std::array<Matrix, 4> &matrices,
-	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc)
+	const std::vector<std::pair<std::array<u32, 2>, u32*>>
+	&target_resolutions_perc)
 {
 	std::array<std::vector<Matrix>, 4> results;
 	for (u8 channel{0}; channel < 4; ++channel) {
@@ -380,7 +381,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	downscale_images(matrices, target_resolutions_perc);
 
 	// Calculate mip maps for stripes (only if the input image is not a square)
-	u32 *previous_stripe{current_target - w * h};
+	const u32 *previous_stripe{current_target - w * h};
 	if (k == 0)
 		previous_stripe = static_cast<u32 *>(img.getData());
 	bool horizontal_stripe{h == 1};
