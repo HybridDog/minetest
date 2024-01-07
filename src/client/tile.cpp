@@ -651,12 +651,10 @@ u32 TextureSource::generateTexture(const std::string &name)
 
 	if (img != NULL) {
 		img = Align2Npot2(img, driver);
+		if (m_setting_mipmap_sharp)
+			generate_custom_mipmaps(*img);
 		// Create texture from resulting image
-		if (m_setting_mipmap_sharp) {
-			tex = add_texture_with_mipmaps(name, *img, *driver);
-		} else {
-			tex = driver->addTexture(name.c_str(), img);
-		}
+		tex = driver->addTexture(name.c_str(), img);
 		guiScalingCache(io::path(name.c_str()), driver, img);
 		img->drop();
 	}
@@ -857,11 +855,9 @@ void TextureSource::rebuildTexture(video::IVideoDriver *driver, TextureInfo &ti)
 	// Create texture from resulting image
 	video::ITexture *t = NULL;
 	if (img) {
-		if (m_setting_mipmap_sharp) {
-			t = add_texture_with_mipmaps(ti.name, *img, *driver);
-		} else {
-			t = driver->addTexture(ti.name.c_str(), img);
-		}
+		if (m_setting_mipmap_sharp)
+			generate_custom_mipmaps(*img);
+		t = driver->addTexture(ti.name.c_str(), img);
 		guiScalingCache(io::path(ti.name.c_str()), driver, img);
 		img->drop();
 	}

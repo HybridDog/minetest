@@ -17,9 +17,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include <ITexture.h>
-#include <IVideoDriver.h>
+#pragma once
+
 #include "irrlichttypes.h"
 
-video::ITexture *add_texture_with_mipmaps(const std::string &name,
-	video::IImage &img, video::IVideoDriver &driver);
+namespace irr::video { class IImage; }
+
+
+/*! \brief Generate mip maps using a custom downscaling algorithm
+ *
+ * \param img The Image for which mip maps are generated
+ */
+void generate_custom_mipmaps(video::IImage &img);

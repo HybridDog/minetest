@@ -21,6 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <array>
 #include <memory>
+#include <stdexcept>
+#include <IImage.h>
 
 // Square root of the patch size; recommended: 2
 constexpr u8 SQR_NP{2};
@@ -326,8 +328,7 @@ void downscale_stripe(const u32 *parent_stripe, u32 parent_stripe_len,
 }  // namespace
 
 
-video::ITexture *add_texture_with_mipmaps(const std::string &name,
-	video::IImage &img, video::IVideoDriver &driver)
+void generate_custom_mipmaps(video::IImage &img)
 {
 	core::dimension2d<u32> dim{img.getDimension()};
 	u32 w{dim.Width};
@@ -335,8 +336,8 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 
 	if (img.getColorFormat() != video::ECF_A8R8G8B8
 			|| img.getImageDataSizeInBytes() != w * h * 4) {
-		throw std::runtime_error("\"" + name +
-			"\" is not a valid video::ECF_A8R8G8B8 texture.");
+		throw std::runtime_error(
+			"The mipmap generation requires a video::ECF_A8R8G8B8 image.");
 	}
 	// The bytes are in bgra order (in big endian order)
 
@@ -351,7 +352,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		total_pixel_cnt += w * h;
 		++mipmapcnt;
 	}
-	std::unique_ptr<u32[]> new_img_data{new u32[total_pixel_cnt]};
+	std::unique_ptr<u32[]> mip_maps_data{new u32[total_pixel_cnt]};
 
 	w = dim.Width;
 	h = dim.Height;
@@ -362,7 +363,7 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 	// Collect target resolutons and associated memory locations
 	std::vector<std::pair<std::array<u32, 2>, u32*>> target_resolutions_perc;
 	u8 k;
-	u32 *current_target{new_img_data.get()};
+	u32 *current_target{mip_maps_data.get()};
 	for (k = 0; k < mipmapcnt; ++k) {
 		if (w == 1 || h == 1) {
 			// Stripes are downscaled differently
@@ -396,9 +397,6 @@ video::ITexture *add_texture_with_mipmaps(const std::string &name,
 		current_target += w * h;
 	}
 
-	// Create the irrlicht texture
-	video::ITexture *tex{driver.addTexture(name.c_str(), &img)};
-	tex->regenerateMipMapLevels(new_img_data.get());
-
-	return tex;
+	// Pass the mip maps to the Irrlicht Image (Irrlicht copies mip_maps_data)
+	img.setMipMapsData(mip_maps_data.get(), false);
 }
