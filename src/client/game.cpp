@@ -682,16 +682,15 @@ public:
 const static float object_hit_delay = 0.2;
 
 struct FpsControl {
-	FpsControl() : last_time(0), busy_time(0), sleep_time(0) {}
-
 	void reset();
 
 	void limit(IrrlichtDevice *device, f32 *dtime);
 
 	u32 getBusyMs() const { return busy_time / 1000; }
 
-	// all values in microseconds (us)
-	u64 last_time, busy_time, sleep_time;
+	// The following values are in microseconds (us)
+	u64 last_time{0}, busy_time{0}, sleep_time{0};
+	s64 sleeping_noise{0};
 };
 
 
@@ -4368,6 +4367,7 @@ void Game::drawScene(ProfilerGraph *graph, RunStats *stats)
 void FpsControl::reset()
 {
 	last_time = porting::getTimeUs();
+	sleeping_noise = 0;
 }
 
 /*
@@ -4381,30 +4381,34 @@ void FpsControl::limit(IrrlichtDevice *device, f32 *dtime)
 	const u64 frametime_min = 1000000.0f / std::max(fps_limit, 1.0f);
 
 	u64 time = porting::getTimeUs();
+	// Make sure time hasn't overflowed
+	if (time < last_time)
+		last_time = time;
 
-	if (time > last_time) // Make sure time hasn't overflowed
-		busy_time = time - last_time;
-	else
-		busy_time = 0;
+	busy_time = time - last_time;
 
-	if (busy_time < frametime_min) {
-		sleep_time = frametime_min - busy_time;
-		if (sleep_time > 0)
-			sleep_us(sleep_time);
-	} else {
+	if (busy_time >= MYMIN(frametime_min, frametime_min - sleeping_noise)) {
+		// The system is slow; get rid of any previous sleep_noise and do not
+		// sleep
 		sleep_time = 0;
+		sleeping_noise = 0;
+		*dtime = (time - last_time + sleeping_noise) / 1000000.0f;
+		last_time = time;
+		return;
 	}
 
-	// Read the timer again to accurately determine how long we actually slept,
-	// rather than calculating it by adding sleep_time to time.
-	time = porting::getTimeUs();
-
-	if (time > last_time) // Make sure last_time hasn't overflowed
-		*dtime = (time - last_time) / 1000000.0f;
-	else
-		*dtime = 0;
-
-	last_time = time;
+	// The system is fast; sleep and remove noise from dtime
+	u64 desired_sleep_time = frametime_min - busy_time - sleeping_noise;
+	sleep_us(desired_sleep_time);
+	// Read the timer again to accurately determine how long we actually slept
+	u64 time_after_sleep = porting::getTimeUs();
+	// Make sure the time hasn't overflowed
+	if (time_after_sleep < time)
+		time = time_after_sleep;
+	sleep_time = time_after_sleep - time;
+	sleeping_noise = time_after_sleep - last_time - frametime_min;
+	*dtime = frametime_min / 1000000.0f;
+	last_time = time_after_sleep;
 }
 
 void Game::showOverlayMessage(const char *msg, float dtime, int percent, bool draw_sky)
