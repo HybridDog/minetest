@@ -851,7 +851,12 @@ enum ToClientCommand : u16
 			f32 center_weight_power
 	*/
 
-	TOCLIENT_NUM_MSG_TYPES = 0x64,
+	TOCLIENT_INTERACT_ACK = 0x64,
+	/*
+		u8 prediction_id
+	*/
+
+	TOCLIENT_NUM_MSG_TYPES = 0x65,
 };
 
 enum ToServerCommand : u16
@@ -969,7 +974,10 @@ enum ToServerCommand : u16
 		u8 fov
 		u8 wanted drawing range
 		optional:
-		u8 flags; it is 0x01 if the camera is inverted
+		u8 flags
+			0x01: The camera is inverted
+			0x02: The prediction_id is sent
+		u8 prediction_id (if flags & 0x02)
 	*/
 
 	TOSERVER_REMOVED_SOUNDS = 0x3a,

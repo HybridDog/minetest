@@ -159,8 +159,8 @@ const ClientCommandFactory clientCommandFactoryTable[TOCLIENT_NUM_MSG_TYPES] =
 	null_command_factory, // 0x1E
 	null_command_factory, // 0x1F
 	{ "TOCLIENT_BLOCKDATA",                2, true }, // 0x20
-	{ "TOCLIENT_ADDNODE",                  0, true }, // 0x21
-	{ "TOCLIENT_REMOVENODE",               0, true }, // 0x22
+	{ "TOCLIENT_ADDNODE",                  2, true }, // 0x21
+	{ "TOCLIENT_REMOVENODE",               2, true }, // 0x22
 	null_command_factory, // 0x23
 	null_command_factory, // 0x24
 	null_command_factory, // 0x25
@@ -226,4 +226,6 @@ const ClientCommandFactory clientCommandFactoryTable[TOCLIENT_NUM_MSG_TYPES] =
 	{ "TOCLIENT_FORMSPEC_PREPEND",         0, true }, // 0x61
 	{ "TOCLIENT_MINIMAP_MODES",            0, true }, // 0x62
 	{ "TOCLIENT_SET_LIGHTING",             0, true }, // 0x63
+	{ "TOCLIENT_INTERACT_ACK",             2, true }, // 0x64
+	// TODO: wireshark Datei ändern
 };

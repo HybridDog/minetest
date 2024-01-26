@@ -43,6 +43,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "util/srp.h"
 #include "clientdynamicinfo.h"
 
+#include <optional>
+
+
 void Server::handleCommand_Deprecated(NetworkPacket* pkt)
 {
 	infostream << "Server: " << toServerCommandTable[pkt->getCommand()].name
@@ -459,8 +462,9 @@ void Server::handleCommand_GotBlocks(NetworkPacket* pkt)
 	}
 }
 
-void Server::process_PlayerPos(RemotePlayer *player, PlayerSAO *playersao,
-	NetworkPacket *pkt)
+void Server::process_InteractionDetails(RemotePlayer *player,
+	PlayerSAO *playersao, NetworkPacket *pkt,
+	std::optional<u8> &prediction_id)
 {
 	if (pkt->getRemainingBytes() < 12 + 12 + 4 + 4 + 4 + 1 + 1)
 		return;
@@ -488,6 +492,11 @@ void Server::process_PlayerPos(RemotePlayer *player, PlayerSAO *playersao,
 	*pkt >> wanted_range;
 	if (pkt->getRemainingBytes() >= 1)
 		*pkt >> bits;
+	if (pkt->getRemainingBytes() >= 1 && (bits & 0x02)) {
+		u8 pred_id;
+		*pkt >> pred_id;
+		prediction_id = pred_id;
+	}
 
 	v3f position((f32)ps.X / 100.0f, (f32)ps.Y / 100.0f, (f32)ps.Z / 100.0f);
 	v3f speed((f32)ss.X / 100.0f, (f32)ss.Y / 100.0f, (f32)ss.Z / 100.0f);
@@ -544,7 +553,8 @@ void Server::handleCommand_PlayerPos(NetworkPacket* pkt)
 		return;
 	}
 
-	process_PlayerPos(player, playersao, pkt);
+	// TODO
+	//~ process_PlayerPos(player, playersao, pkt);
 }
 
 void Server::handleCommand_DeletedBlocks(NetworkPacket* pkt)
@@ -958,12 +968,13 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 	if (playersao->isDead()) {
 		actionstream << "Server: " << player->getName()
 				<< " tried to interact while dead; ignoring." << std::endl;
-		getClient(peer_id)->respondToInteraction(action, pointed, false);
+		getClient(peer_id)->respondToInteraction(action, pointed, false, std::nullopt);
 		m_script->on_cheat(playersao, "interacted_while_dead");
 		return;
 	}
 
-	process_PlayerPos(player, playersao, pkt);
+	std::optional<u8> prediction_id;
+	process_InteractionDetails(player, playersao, pkt, prediction_id);
 
 	v3f player_pos = playersao->getLastGoodPosition();
 
@@ -998,7 +1009,8 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 	if (!checkPriv(player->getName(), "interact")) {
 		actionstream << player->getName() << " attempted to interact with " <<
 				pointed.dump() << " without 'interact' privilege" << std::endl;
-		getClient(peer_id)->respondToInteraction(action, pointed, false);
+		getClient(peer_id)->respondToInteraction(action, pointed, false,
+			prediction_id);
 		return;
 	}
 
@@ -1026,7 +1038,8 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 		float d = playersao->getEyePosition().getDistanceFrom(target_pos);
 
 		if (!checkInteractDistance(player, d, pointed.dump())) {
-			getClient(peer_id)->respondToInteraction(action, pointed, false);
+			getClient(peer_id)->respondToInteraction(action, pointed, false,
+				prediction_id);
 			return;
 		}
 	}
@@ -1184,7 +1197,7 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 		bool prediction_success =
 			m_env->getMap().getNode(p_under).getContent() == CONTENT_AIR;
 		getClient(peer_id)->respondToInteraction(action, pointed,
-			prediction_success);
+			prediction_success, prediction_id);
 
 		return;
 	} // action == INTERACT_DIGGING_COMPLETED
@@ -1232,7 +1245,7 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 		// pointed.above or pointed.under,
 		// we assume that a prediction is always wrong.
 		getClient(peer_id)->respondToInteraction(action, pointed,
-			!had_prediction);
+			!had_prediction, prediction_id);
 		return;
 	} // action == INTERACT_PLACE
 

@@ -210,8 +210,8 @@ public:
 	void Send(session_t peer_id, NetworkPacket *pkt);
 
 	// Helper for handleCommand_PlayerPos and handleCommand_Interact
-	void process_PlayerPos(RemotePlayer *player, PlayerSAO *playersao,
-		NetworkPacket *pkt);
+	void process_InteractionDetails(RemotePlayer *player, PlayerSAO *playersao,
+		NetworkPacket *pkt, std::optional<u8> &prediction_id);
 
 	// Both setter and getter need no envlock,
 	// can be called freely from threads

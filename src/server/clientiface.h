@@ -279,9 +279,11 @@ public:
 	 * \param prediction_success If true, assume that the client has made a
 	 *   correct prediction and send the mapblock only if an outdated mapblock
 	 *   is currently "on wire", which can erroneously override the prediction
+	 * \param prediction_id If set, send a packet to the client which TODO
 	 */
 	void respondToInteraction(InteractAction action,
-		const PointedThing &pointed, bool prediction_success);
+		const PointedThing &pointed, bool prediction_success,
+		const std::optional<u8> &prediction_id);
 
 	u32 getSendingCount() const { return m_blocks_sending.size(); }
 

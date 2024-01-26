@@ -478,12 +478,17 @@ void RemoteClient::SetBlocksNotSent(const std::vector<v3s16> &blocks)
 }
 
 void RemoteClient::respondToInteraction(InteractAction action,
-	const PointedThing &pointed, bool prediction_success)
+	const PointedThing &pointed, bool prediction_success,
+	const std::optional<u8> &prediction_id)
 {
 	if ((action != INTERACT_PLACE && action != INTERACT_DIGGING_COMPLETED)
 			|| pointed.type != POINTEDTHING_NODE)
 		// The client has not predicted not node changes
 		return;
+
+	if (prediction_id.has_value()) {
+		// TODO: Enqueue a packet acknowledging the prediction id
+	}
 
 	// The client may have an outdated mapblock if the placement or dig
 	// prediction was wrong or if an old mapblock is still being sent to it.
