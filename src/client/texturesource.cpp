@@ -411,7 +411,7 @@ u32 TextureSource::getTextureId(const std::string &name)
  *
  * \tparam overlay If enabled, only modify pixels in dst which are fully opaque.
  *   Defaults to false.
- * \param src Top image. This image must have the ECF_A8R8G8B8 colour format.
+ * \param src Top image. This image must have the ECF_A8R8G8B8 color format.
  * \param dst Bottom image.
  *   The top image is drawn onto this base image in-place.
  * \param dst_pos An offset vector to move src before drawing it onto dst
@@ -419,7 +419,7 @@ u32 TextureSource::getTextureId(const std::string &name)
 */
 template<bool overlay = false>
 static void blit_with_alpha(video::IImage *src, video::IImage *dst,
-	const v2s32 &dst_pos, const v2u32 &size);
+	v2s32 dst_pos, v2u32 size);
 
 // Apply a color to an image.  Uses an int (0-255) to calculate the ratio.
 // If the ratio is 255 or -1 and keep_alpha is true, then it multiples the
@@ -1859,17 +1859,20 @@ bool TextureSource::generateImagePart(std::string_view part_of_name,
 
 namespace {
 
-/// Draw src on top of dst
-template <bool overlay, class Colour>
-void blit_pixel(const Colour &src, Colour &dst)
+/// Draw a source color on top of a destination color
+template <bool overlay, class Color>
+//~ void blit_pixel(u32 src_int, u32 &dst_int)
+void blit_pixel(Color src, Color &dst)
 {
+	//~ Color src{reinterpret_cast<Color>(src_int)};
+	//~ Color &dst{reinterpret_cast<Color &>(dst_int)};
 	if (src.a == 255 || dst.a == 0) {
 		if constexpr (overlay) {
 			if (dst.a != 255)
 				return;
 		}
 		// The top pixel is fully opaque or the bottom pixel is
-		// fully transparent -> replace the colour
+		// fully transparent -> replace the color
 		dst = src;
 	} else if (src.a == 0) {
 		// A fully transparent pixel is on top -> do nothing
@@ -1899,9 +1902,9 @@ void blit_pixel(const Colour &src, Colour &dst)
 }
 
 /// A helper function for blit_with_alpha to support different endianesses
-template<bool overlay, class Colour>
+template<bool overlay, class Color>
 void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
-	const v2s32 &dst_pos, const v2u32 &size)
+	v2s32 dst_pos, v2u32 size)
 {
 	if (dst->getColorFormat() != video::ECF_A8R8G8B8)
 		throw BaseException("blit_with_alpha() supports only ECF_A8R8G8B8 "
@@ -1922,8 +1925,8 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 		drop_src = true;
 	}
 
-	Colour *pixels_src{reinterpret_cast<Colour *>(src->getData())};
-	Colour *pixels_dst{reinterpret_cast<Colour *>(dst->getData())};
+	Color *pixels_src{reinterpret_cast<Color *>(src->getData())};
+	Color *pixels_dst{reinterpret_cast<Color *>(dst->getData())};
 
 	// Limit y and x to the overlapping ranges
 	// s.t. the positions are all in bounds after offsetting.
@@ -1938,7 +1941,7 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 		size_t i_dst{(dst_pos.Y + y0) * dst_dim.Width
 			+ dst_pos.X + x_start};
 		for (u32 x0{x_start}; x0 < x_end; ++x0) {
-			blit_pixel<overlay, Colour>(pixels_src[i_src++],
+			blit_pixel<overlay, Color>(pixels_src[i_src++],
 				pixels_dst[i_dst++]);
 		}
 	}
@@ -1950,20 +1953,20 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 
 template<bool overlay>
 static void blit_with_alpha(video::IImage *src, video::IImage *dst,
-	const v2s32 &dst_pos, const v2u32 &size)
+	v2s32 dst_pos, v2u32 size)
 {
 	u32 one{1};
 	bool is_little_endian{*reinterpret_cast<u8 *>(&one) == 1};
 	if (is_little_endian) {
-		struct Colour {
+		struct __attribute__((__packed__)) Color {
 			u8 b, g, r, a;
 		};
-		blit_with_alpha_any_endian<overlay, Colour>(src, dst, dst_pos, size);
+		blit_with_alpha_any_endian<overlay, Color>(src, dst, dst_pos, size);
 	} else {
-		struct Colour {
+		struct __attribute__((__packed__)) Color {
 			u8 a, r, g, b;
 		};
-		blit_with_alpha_any_endian<overlay, Colour>(src, dst, dst_pos, size);
+		blit_with_alpha_any_endian<overlay, Color>(src, dst, dst_pos, size);
 	}
 }
 
@@ -2098,7 +2101,7 @@ static void apply_hue_saturation(video::IImage *dst, v2u32 dst_pos, v2u32 size,
 				}
 
 				// Adjusting saturation in the same manner as lightness resulted in
-				// muted colours being affected too much and bright colours not
+				// muted colors being affected too much and bright colors not
 				// affected enough, so I'm borrowing a leaf out of gimp's book and
 				// using a different scaling approach for saturation.
 				// https://github.com/GNOME/gimp/blob/6cc1e035f1822bf5198e7e99a53f7fa6e281396a/app/operations/gimpoperationhuesaturation.c#L139-L145=
@@ -2457,7 +2460,7 @@ video::ITexture* TextureSource::getNormalTexture(const std::string &name)
 }
 
 namespace {
-	// For more colourspace transformations, see for example
+	// For more colorspace transformations, see for example
 	// https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
 
 	inline float linear_to_srgb_component(float v)
