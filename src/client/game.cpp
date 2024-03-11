@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/gameui.h"
 #include "client/inputhandler.h"
 #include "client/texturepaths.h"
+#include "client/texturesource.h"
 #include "client/keys.h"
 #include "client/joystick_controller.h"
 #include "client/mapblock_mesh.h"
@@ -1122,6 +1123,8 @@ bool Game::startup(bool *kill,
 		return false;
 
 	m_rendering_engine->initialize(client, hud);
+
+	run_blit_with_alpha_tests();
 
 	return true;
 }

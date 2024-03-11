@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "texturesource.h"
 
+#include <chrono>
 #include <IVideoDriver.h>
 #include <IFileSystem.h>
 #include "util/thread.h"
@@ -1952,7 +1953,7 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 }  // namespace
 
 template<bool overlay>
-static void blit_with_alpha(video::IImage *src, video::IImage *dst,
+static void blit_with_alpha_func(video::IImage *src, video::IImage *dst,
 	v2s32 dst_pos, v2u32 size)
 {
 	u32 one{1};
@@ -1968,6 +1969,42 @@ static void blit_with_alpha(video::IImage *src, video::IImage *dst,
 		};
 		blit_with_alpha_any_endian<overlay, Color>(src, dst, dst_pos, size);
 	}
+}
+
+struct BlitWithAlphaArgs {
+	video::IImage *src;
+	video::IImage *dst;
+	v2s32 dst_pos;
+	v2u32 size;
+	bool overlay;
+};
+std::vector<BlitWithAlphaArgs> prepared_inputs;
+
+template<bool overlay>
+static void blit_with_alpha(video::IImage *src, video::IImage *dst,
+	v2s32 dst_pos, v2u32 size)
+{
+	video::IVideoDriver *driver{RenderingEngine::get_video_driver()};
+	video::IImage *src_copy = driver->createImage(src->getColorFormat(), src->getDimension());
+	src->copyTo(src_copy);
+	video::IImage *dst_copy = driver->createImage(dst->getColorFormat(), dst->getDimension());
+	dst->copyTo(dst_copy);
+	prepared_inputs.emplace_back(BlitWithAlphaArgs{src_copy, dst_copy, dst_pos, size, overlay});
+	blit_with_alpha_func<overlay>(src, dst, dst_pos, size);
+}
+
+void run_blit_with_alpha_tests()
+{
+	errorstream << "Number of blit_with_alpha inputs: " << prepared_inputs.size() << "\n";
+	auto start = std::chrono::steady_clock::now();
+	for (const auto &v : prepared_inputs) {
+		if (v.overlay)
+			blit_with_alpha_func<true>(v.src, v.dst, v.dst_pos, v.size);
+		else
+			blit_with_alpha_func<false>(v.src, v.dst, v.dst_pos, v.size);
+	}
+	float elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
+	errorstream << "Duration: " << elapsed << " s\n";
 }
 
 /*
