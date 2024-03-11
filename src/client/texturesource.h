@@ -91,3 +91,5 @@ public:
 };
 
 IWritableTextureSource *createTextureSource();
+
+void run_blit_with_alpha_tests();
