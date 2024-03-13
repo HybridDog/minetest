@@ -1865,41 +1865,21 @@ template <bool overlay, class Color>
 //~ void blit_pixel(u32 src_int, u32 &dst_int)
 void blit_pixel(Color src, Color &dst)
 {
-	//~ Color src{reinterpret_cast<Color>(src_int)};
-	//~ Color &dst{reinterpret_cast<Color &>(dst_int)};
-	if (src.a == 255 || dst.a == 0) {
-		if constexpr (overlay) {
-			if (dst.a != 255)
-				return;
-		}
-		// The top pixel is fully opaque or the bottom pixel is
-		// fully transparent -> replace the color
-		dst = src;
-	} else if (src.a == 0) {
-		// A fully transparent pixel is on top -> do nothing
+	// Required condition against division by zero
+	if (src.a == 0)
 		return;
-	} else if (dst.a == 255) {
-		// A semi-transparent pixel is on top and an opaque one in
-		// the bottom -> lerp r, g, and b
-		dst.r = (dst.r * (255 - src.a) + src.r * src.a) / 255;
-		dst.g = (dst.g * (255 - src.a) + src.g * src.a) / 255;
-		dst.b = (dst.b * (255 - src.a) + src.b * src.a) / 255;
-	} else {
-		if constexpr (overlay) {
+	if constexpr (overlay) {
+		if (dst.a != 255)
 			return;
-		} else {
-			// A semi-transparent pixel is on top of a
-			// semi-transparent pixel -> general alpha compositing
-			auto a_new_255{src.a * 255 + (255 - src.a) * dst.a};
-			dst.r = (dst.r * (255 - src.a) * dst.a + src.r * src.a * 255)
-				/ a_new_255;
-			dst.g = (dst.g * (255 - src.a) * dst.a + src.g * src.a * 255)
-				/ a_new_255;
-			dst.b = (dst.b * (255 - src.a) * dst.a + src.b * src.a * 255)
-				/ a_new_255;
-			dst.a = a_new_255 / 255;
-		}
 	}
+	auto a_new_255{src.a * 255 + (255 - src.a) * dst.a};
+	dst.r = (dst.r * (255 - src.a) * dst.a + src.r * src.a * 255)
+		/ a_new_255;
+	dst.g = (dst.g * (255 - src.a) * dst.a + src.g * src.a * 255)
+		/ a_new_255;
+	dst.b = (dst.b * (255 - src.a) * dst.a + src.b * src.a * 255)
+		/ a_new_255;
+	dst.a = a_new_255 / 255;
 }
 
 /// A helper function for blit_with_alpha to support different endianesses
