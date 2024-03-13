@@ -1861,50 +1861,61 @@ bool TextureSource::generateImagePart(std::string_view part_of_name,
 namespace {
 
 /// Draw a source color on top of a destination color
-template <bool overlay, class Color>
-//~ void blit_pixel(u32 src_int, u32 &dst_int)
-void blit_pixel(Color src, Color &dst)
+template <bool overlay>
+void blit_pixel(video::SColor src_col, video::SColor &dst_col)
 {
-	//~ Color src{reinterpret_cast<Color>(src_int)};
-	//~ Color &dst{reinterpret_cast<Color &>(dst_int)};
-	if (src.a == 255 || dst.a == 0) {
-		if constexpr (overlay) {
-			if (dst.a != 255)
-				return;
-		}
-		// The top pixel is fully opaque or the bottom pixel is
-		// fully transparent -> replace the color
-		dst = src;
-	} else if (src.a == 0) {
+	u8 dst_a{static_cast<u8>(dst_col.getAlpha())};
+	if constexpr (overlay) {
+		if (dst_a != 255)
+			// The bottom pixel has transparency -> do nothing
+			return;
+	}
+	u8 src_a{static_cast<u8>(src_col.getAlpha())};
+	if (src_a == 0) {
 		// A fully transparent pixel is on top -> do nothing
 		return;
-	} else if (dst.a == 255) {
+	}
+	if (src_a == 255 || dst_a == 0) {
+		// The top pixel is fully opaque or the bottom pixel is
+		// fully transparent -> replace the color
+		dst_col = src_col;
+		return;
+	}
+	struct Color { u8 r, g, b; };
+	Color src{
+		static_cast<u8>(src_col.getRed()),
+		static_cast<u8>(src_col.getGreen()),
+		static_cast<u8>(src_col.getBlue())
+	};
+	Color dst{
+		static_cast<u8>(dst_col.getRed()),
+		static_cast<u8>(dst_col.getGreen()),
+		static_cast<u8>(dst_col.getBlue())
+	};
+	if (dst_a == 255) {
 		// A semi-transparent pixel is on top and an opaque one in
 		// the bottom -> lerp r, g, and b
-		dst.r = (dst.r * (255 - src.a) + src.r * src.a) / 255;
-		dst.g = (dst.g * (255 - src.a) + src.g * src.a) / 255;
-		dst.b = (dst.b * (255 - src.a) + src.b * src.a) / 255;
-	} else {
-		if constexpr (overlay) {
-			return;
-		} else {
-			// A semi-transparent pixel is on top of a
-			// semi-transparent pixel -> general alpha compositing
-			auto a_new_255{src.a * 255 + (255 - src.a) * dst.a};
-			dst.r = (dst.r * (255 - src.a) * dst.a + src.r * src.a * 255)
-				/ a_new_255;
-			dst.g = (dst.g * (255 - src.a) * dst.a + src.g * src.a * 255)
-				/ a_new_255;
-			dst.b = (dst.b * (255 - src.a) * dst.a + src.b * src.a * 255)
-				/ a_new_255;
-			dst.a = a_new_255 / 255;
-		}
+		dst.r = (dst.r * (255 - src_a) + src.r * src_a) / 255;
+		dst.g = (dst.g * (255 - src_a) + src.g * src_a) / 255;
+		dst.b = (dst.b * (255 - src_a) + src.b * src_a) / 255;
+		dst_col.set(255, dst.r, dst.g, dst.b);
+		return;
 	}
+	// A semi-transparent pixel is on top of a
+	// semi-transparent pixel -> general alpha compositing
+	auto a_new_255{src_a * 255 + (255 - src_a) * dst_a};
+	dst.r = (dst.r * (255 - src_a) * dst_a + src.r * src_a * 255)
+		/ a_new_255;
+	dst.g = (dst.g * (255 - src_a) * dst_a + src.g * src_a * 255)
+		/ a_new_255;
+	dst.b = (dst.b * (255 - src_a) * dst_a + src.b * src_a * 255)
+		/ a_new_255;
+	dst_a = a_new_255 / 255;
+	dst_col.set(dst_a, dst.r, dst.g, dst.b);
 }
 
-/// A helper function for blit_with_alpha to support different endianesses
-template<bool overlay, class Color>
-void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
+template<bool overlay>
+void blit_with_alpha_func(video::IImage *src, video::IImage *dst,
 	v2s32 dst_pos, v2u32 size)
 {
 	if (dst->getColorFormat() != video::ECF_A8R8G8B8)
@@ -1926,8 +1937,10 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 		drop_src = true;
 	}
 
-	Color *pixels_src{reinterpret_cast<Color *>(src->getData())};
-	Color *pixels_dst{reinterpret_cast<Color *>(dst->getData())};
+	video::SColor *pixels_src
+		{reinterpret_cast<video::SColor *>(src->getData())};
+	video::SColor *pixels_dst
+		{reinterpret_cast<video::SColor *>(dst->getData())};
 
 	// Limit y and x to the overlapping ranges
 	// s.t. the positions are all in bounds after offsetting.
@@ -1942,7 +1955,7 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 		size_t i_dst{(dst_pos.Y + y0) * dst_dim.Width
 			+ dst_pos.X + x_start};
 		for (u32 x0{x_start}; x0 < x_end; ++x0) {
-			blit_pixel<overlay, Color>(pixels_src[i_src++],
+			blit_pixel<overlay>(pixels_src[i_src++],
 				pixels_dst[i_dst++]);
 		}
 	}
@@ -1951,25 +1964,6 @@ void blit_with_alpha_any_endian(video::IImage *src, video::IImage *dst,
 }
 
 }  // namespace
-
-template<bool overlay>
-static void blit_with_alpha_func(video::IImage *src, video::IImage *dst,
-	v2s32 dst_pos, v2u32 size)
-{
-	u32 one{1};
-	bool is_little_endian{*reinterpret_cast<u8 *>(&one) == 1};
-	if (is_little_endian) {
-		struct __attribute__((__packed__)) Color {
-			u8 b, g, r, a;
-		};
-		blit_with_alpha_any_endian<overlay, Color>(src, dst, dst_pos, size);
-	} else {
-		struct __attribute__((__packed__)) Color {
-			u8 a, r, g, b;
-		};
-		blit_with_alpha_any_endian<overlay, Color>(src, dst, dst_pos, size);
-	}
-}
 
 struct BlitWithAlphaArgs {
 	video::IImage *src;
