@@ -82,6 +82,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 	#include "client/sound/sound_openal.h"
 #endif
 
+u32 FRAME_ID = 0;
+
 /*
 	Text input system
 */
@@ -373,6 +375,8 @@ class GameGlobalShaderConstantSetter : public IShaderConstantSetter
 {
 	Sky *m_sky;
 	Client *m_client;
+	u32 m_last_frame_id;
+	u32 m_onset_calls;
 	CachedVertexShaderSetting<float> m_animation_timer_vertex{"animationTimer"};
 	CachedPixelShaderSetting<float> m_animation_timer_pixel{"animationTimer"};
 	CachedVertexShaderSetting<float>
@@ -468,6 +472,12 @@ public:
 
 	void onSetConstants(video::IMaterialRendererServices *services) override
 	{
+		if (FRAME_ID != m_last_frame_id) {
+			m_last_frame_id = FRAME_ID;
+			errorstream << "num onSetConstants calls: " << m_onset_calls << "\n";
+			m_onset_calls = 0;
+		}
+		++m_onset_calls;
 		u32 daynight_ratio = (float)m_client->getEnv().getDayNightRatio();
 		video::SColorf sunlight;
 		get_sunlight_color(&sunlight, daynight_ratio);
@@ -1384,7 +1394,7 @@ void Game::copyServerClientCache()
 {
 	// It would be possible to let the client directly read the media files
 	// from where the server knows they are. But aside from being more complicated
-	// it would also *not* fill the media cache and cause slower joining of 
+	// it would also *not* fill the media cache and cause slower joining of
 	// remote servers.
 	// (Imagine that you launch a game once locally and then connect to a server.)
 
@@ -2712,6 +2722,7 @@ inline void Game::step(f32 dtime)
 
 	if (!m_is_paused)
 		client->step(dtime);
+	++FRAME_ID;
 }
 
 static void pauseNodeAnimation(PausedNodesList &paused, scene::ISceneNode *node) {
