@@ -119,6 +119,7 @@ void *ServerThread::run()
 	}
 
 	float dtime = 0.0f;
+	u64 sleeping_noise_us = 0;
 
 	while (!stopRequested()) {
 		ScopeProfiler spm(g_profiler, "Server::RunStep() (max)", SPT_MAX);
@@ -129,10 +130,10 @@ void *ServerThread::run()
 
 		try {
 			m_server->AsyncRunStep(step_settings.pause ? 0.0f : dtime);
+			u64 busy_time_us = porting::getTimeUs() - t0;
 
-			const float remaining_time = step_settings.steplen
-					- 1e-6f * (porting::getTimeUs() - t0);
-			m_server->Receive(remaining_time);
+			float wait_time = step_settings.steplen - 1e-6f * busy_time_us;
+			m_server->Receive(wait_time);
 
 		} catch (con::PeerNotFoundException &e) {
 			infostream<<"Server: PeerNotFoundException"<<std::endl;
