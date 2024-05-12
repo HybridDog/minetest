@@ -124,6 +124,8 @@ void *ServerThread::run()
 	while (!stopRequested()) {
 		ScopeProfiler spm(g_profiler, "Server::RunStep() (max)", SPT_MAX);
 
+		// TODO: highly unfinished
+
 		u64 t0 = porting::getTimeUs();
 
 		const Server::StepSettings step_settings = m_server->getStepSettings();
@@ -131,6 +133,17 @@ void *ServerThread::run()
 		try {
 			m_server->AsyncRunStep(step_settings.pause ? 0.0f : dtime);
 			u64 busy_time_us = porting::getTimeUs() - t0;
+
+			u64 wait_time_us = 0;
+			u64 steplen_us = step_settings.steplen * 1000000.0f;
+			if (busy_time_us >= MYMIN(steplen_us, steplen_us - sleeping_noise_us)) {
+				// The system is slow; get rid of any previous noise and do not
+				// sleep
+				wait_time_us = (busy_time_us + sleeping_noise) / 1000000.0f;
+				sleeping_noise = 0;
+				//~ last_time = time;
+				//~ return;
+			}
 
 			float wait_time = step_settings.steplen - 1e-6f * busy_time_us;
 			m_server->Receive(wait_time);
