@@ -672,14 +672,14 @@ static void fillTileAttribs(ITextureSource *tsrc, TileLayer *layer,
 		u8 material_type, u32 shader_id, bool backface_culling,
 		const TextureSettings &tsettings)
 {
-	bool stochastic{true};  // TODO
 	layer->shader_id = shader_id;
-	if (stochastic && tiledef.name != "") {
+	if (material_type == TILE_MATERIAL_OPAQUE_STS) {
 		layer->texture_stochastic = tsrc->getTextureForMeshStochastic(
 			tiledef.name, layer->texture_id);
 		layer->texture = layer->texture_stochastic->getGaussianizedTexture();
 	} else {
-		layer->texture = tsrc->getTextureForMesh(tiledef.name, &layer->texture_id);
+		layer->texture = tsrc->getTextureForMesh(tiledef.name,
+			&layer->texture_id);
 	}
 	layer->material_type = material_type;
 
@@ -906,14 +906,13 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 		}
 	}
 
-	u32 tile_shader = shdsrc->getShader("nodes_shader", material_type, drawtype);
-
 	MaterialType overlay_material = material_type;
 	if (overlay_material == TILE_MATERIAL_OPAQUE)
 		overlay_material = TILE_MATERIAL_BASIC;
 	else if (overlay_material == TILE_MATERIAL_LIQUID_OPAQUE)
 		overlay_material = TILE_MATERIAL_LIQUID_TRANSPARENT;
 
+	// TODO: document no support for overlay or special tiles, or support it
 	u32 overlay_shader = shdsrc->getShader("nodes_shader", overlay_material, drawtype);
 
 	// Tiles (fill in f->tiles[])
@@ -921,8 +920,20 @@ void ContentFeatures::updateTextures(ITextureSource *tsrc, IShaderSource *shdsrc
 		// TODO: aligned if stochastic
 		tiles[j].world_aligned = isWorldAligned(tdef[j].align_style,
 				tsettings.world_aligned_mode, drawtype);
+		MaterialType material_type_for_tile = material_type;
+		if (tdef[j].sts_scale > 0) {
+			if (material_type == TILE_MATERIAL_OPAQUE) {
+				material_type_for_tile = TILE_MATERIAL_OPAQUE_STS;
+			//~ } else {
+				// TODO: why does warningstream only show digits here?
+				//~ warningstream << 'Stochastic texture sampling for texture "' << tdef[j].name << '" of some node has been disabled since currently only TILE_MATERIAL_OPAQUE is supported.\n';
+				//~ warningstream << 'Stochastic texture sampling for some node has been disabled since currently only TILE_MATERIAL_OPAQUE is supported.\n';
+			}
+		}
+		u32 tile_shader = shdsrc->getShader("nodes_shader",
+			material_type_for_tile, drawtype);
 		fillTileAttribs(tsrc, &tiles[j].layers[0], tiles[j], tdef[j],
-				color, material_type, tile_shader,
+				color, material_type_for_tile, tile_shader,
 				tdef[j].backface_culling, tsettings);
 		if (!tdef_overlay[j].name.empty())
 			fillTileAttribs(tsrc, &tiles[j].layers[1], tiles[j], tdef_overlay[j],

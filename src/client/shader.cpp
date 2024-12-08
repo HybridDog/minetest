@@ -514,6 +514,7 @@ ShaderInfo ShaderSource::generateShader(const std::string &name,
 	shaderinfo.drawtype = drawtype;
 	switch (material_type) {
 	case TILE_MATERIAL_OPAQUE:
+	case TILE_MATERIAL_OPAQUE_STS:
 	case TILE_MATERIAL_LIQUID_OPAQUE:
 	case TILE_MATERIAL_WAVING_LIQUID_OPAQUE:
 		shaderinfo.base_material = video::EMT_SOLID;
@@ -647,6 +648,7 @@ ShaderInfo ShaderSource::generateShader(const std::string &name,
 	PROVIDE(TILE_MATERIAL_WAVING_LEAVES);
 	PROVIDE(TILE_MATERIAL_WAVING_PLANTS);
 	PROVIDE(TILE_MATERIAL_OPAQUE);
+	PROVIDE(TILE_MATERIAL_OPAQUE_STS);
 	PROVIDE(TILE_MATERIAL_WAVING_LIQUID_BASIC);
 	PROVIDE(TILE_MATERIAL_WAVING_LIQUID_TRANSPARENT);
 	PROVIDE(TILE_MATERIAL_WAVING_LIQUID_OPAQUE);
@@ -654,10 +656,6 @@ ShaderInfo ShaderSource::generateShader(const std::string &name,
 	PROVIDE(TILE_MATERIAL_PLAIN_ALPHA);
 
 #undef PROVIDE
-
-	// TODO
-	bool stochastic{true};
-	shaders_header << "#define STOCHASTIC_TEXTURE_SAMPLING " << stochastic << "\n";
 
 	shaders_header << "#define MATERIAL_TYPE " << (int)material_type << "\n";
 	shaders_header << "#define DRAW_TYPE " << (int)drawtype << "\n";

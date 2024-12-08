@@ -271,6 +271,12 @@ struct TileDef
 	video::SColor color = video::SColor(0xFFFFFFFF);
 	AlignStyle align_style = ALIGN_STYLE_NODE;
 	u8 scale = 0;
+	/*! Grid scale for stochastic texture sampling
+	 *
+	 * If zero, stochastic texture sampling is disabled for the tile.
+	 */
+	// TODO: currently hardcoded to 1
+	f32 sts_scale = 1.0f;
 
 	struct TileAnimationParams animation;
 

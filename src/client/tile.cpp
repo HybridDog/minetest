@@ -9,6 +9,7 @@ void TileLayer::applyMaterialOptions(video::SMaterial &material) const
 {
 	switch (material_type) {
 	case TILE_MATERIAL_OPAQUE:
+	case TILE_MATERIAL_OPAQUE_STS:
 	case TILE_MATERIAL_LIQUID_OPAQUE:
 	case TILE_MATERIAL_WAVING_LIQUID_OPAQUE:
 		material.MaterialType = video::EMT_SOLID;
