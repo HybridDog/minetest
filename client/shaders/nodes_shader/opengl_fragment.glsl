@@ -500,7 +500,7 @@ vec4 sample_texture_stochastic(vec2 uv)
 // Compute local triangle barycentric coordinates and vertex IDs
 // TriangleGrid
 	// Scaling of the input
-	vec2 uv_grid = uv * gridScaling;
+	vec2 uv_grid = uv / gridScaling;
 
 	// Skew input space into simplex triangle grid
 	const mat2 gridToSkewedGrid = mat2(1.0, 0.0, -0.57735027, 1.15470054);

@@ -493,6 +493,7 @@ public:
 		m_texel_size0_pixel.set(m_texel_size0, services);
 
 		if (m_texture_stochastic) {
+			// TODO: currently hardcoded
 			float grid_scaling = 1.0f;
 			m_grid_scaling.set(&grid_scaling, services);
 			tex_id = 1;

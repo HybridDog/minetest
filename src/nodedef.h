@@ -275,7 +275,7 @@ struct TileDef
 	 *
 	 * If zero, stochastic texture sampling is disabled for the tile.
 	 */
-	// TODO: currently hardcoded to 1
+	// TODO: currently hardcoded
 	f32 sts_scale = 1.0f;
 
 	struct TileAnimationParams animation;
