@@ -8,10 +8,12 @@
 
 #pragma once
 
-#include "ogg_file.h"
+#include "al_helpers.h"
+
 #include <memory>
 #include <tuple>
-#include <vector>
+#include <optional>
+#include <string>
 
 namespace sound {
 
@@ -20,11 +22,6 @@ namespace sound {
  */
 struct ISoundDataOpen
 {
-	OggFileDecodeInfo m_decode_info;
-
-	explicit ISoundDataOpen(const OggFileDecodeInfo &decode_info) :
-			m_decode_info(decode_info) {}
-
 	virtual ~ISoundDataOpen() = default;
 
 	/**
@@ -32,6 +29,27 @@ struct ISoundDataOpen
 	 * @return Whether it's streaming data.
 	 */
 	virtual bool isStreaming() const noexcept = 0;
+
+	/**
+	 * The audio data can either be mono or stereo.
+	 * @return Whether it's stereo data. TODO: is it interleaved stereo?
+	 */
+	virtual bool isStereo() const noexcept = 0;
+
+	/**
+	 * @return TODO
+	 */
+	virtual f32 getLengthSeconds() const noexcept = 0;
+
+	/**
+	 * @return TODO
+	 */
+	virtual ALuint getLengthSamples() const noexcept = 0;
+
+	/**
+	 * @return TODO
+	 */
+	virtual const std::string &getNameForLogging() const noexcept = 0;
 
 	/**
 	 * Load a buffer containing data starting at the given offset. Or just get it
@@ -50,10 +68,8 @@ struct ISoundDataOpen
 	 *         if `offset` is invalid.
 	 */
 	virtual std::tuple<ALuint, ALuint, ALuint> getOrLoadBufferAt(ALuint offset) = 0;
-
-	static std::shared_ptr<ISoundDataOpen> fromOggFile(std::unique_ptr<RAIIOggFile> oggfile,
-		const std::string &filename_for_logging);
 };
+
 
 /**
  * Will be opened lazily when first used.
@@ -89,74 +105,6 @@ struct SoundDataUnopenFile final : ISoundDataUnopen
 	explicit SoundDataUnopenFile(const std::string &path) : m_path(path) {}
 
 	std::shared_ptr<ISoundDataOpen> open(const std::string &sound_name) && override;
-};
-
-/**
- * Non-streaming opened sound data.
- * All data is completely loaded in one buffer.
- */
-struct SoundDataOpenBuffer final : ISoundDataOpen
-{
-	RAIIALSoundBuffer m_buffer;
-
-	SoundDataOpenBuffer(std::unique_ptr<RAIIOggFile> oggfile,
-			const OggFileDecodeInfo &decode_info);
-
-	bool isStreaming() const noexcept override { return false; }
-
-	std::tuple<ALuint, ALuint, ALuint> getOrLoadBufferAt(ALuint offset) override
-	{
-		if (offset >= m_decode_info.length_samples)
-			return {0, m_decode_info.length_samples, 0};
-		return {m_buffer.get(), m_decode_info.length_samples, offset};
-	}
-};
-
-/**
- * Streaming opened sound data.
- *
- * Uses a sorted list of contiguous sound data regions (`ContiguousBuffers`s) for
- * efficient seeking.
- */
-struct SoundDataOpenStream final : ISoundDataOpen
-{
-	/**
-	 * An OpenAL buffer that goes until `m_end` (exclusive).
-	 */
-	struct SoundBufferUntil final
-	{
-		ALuint m_end;
-		RAIIALSoundBuffer m_buffer;
-	};
-
-	/**
-	 * A sorted non-empty vector of contiguous buffers.
-	 * The start (inclusive) of each buffer is the end of its predecessor, or
-	 * `m_start` for the first buffer.
-	 */
-	struct ContiguousBuffers final
-	{
-		ALuint m_start;
-		std::vector<SoundBufferUntil> m_buffers;
-	};
-
-	std::unique_ptr<RAIIOggFile> m_oggfile;
-	// A sorted vector of non-overlapping, non-contiguous `ContiguousBuffers`s.
-	std::vector<ContiguousBuffers> m_bufferss;
-
-	SoundDataOpenStream(std::unique_ptr<RAIIOggFile> oggfile,
-			const OggFileDecodeInfo &decode_info);
-
-	bool isStreaming() const noexcept override { return true; }
-
-	std::tuple<ALuint, ALuint, ALuint> getOrLoadBufferAt(ALuint offset) override;
-
-private:
-	// offset must be before after_it's m_start and after (after_it-1)'s last m_end
-	// new buffer will be inserted into m_bufferss before after_it
-	// returns same as getOrLoadBufferAt
-	std::tuple<ALuint, ALuint, ALuint> loadBufferAt(ALuint offset,
-			std::vector<ContiguousBuffers>::iterator after_it);
 };
 
 } // namespace sound

@@ -8,6 +8,7 @@ if(USE_SOUND)
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/playing_sound.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/proxy_sound_manager.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/sound_data.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/sound/sound_data_ogg.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/sound_manager.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/sound_openal.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/sound/sound_singleton.cpp

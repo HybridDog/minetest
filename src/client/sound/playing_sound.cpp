@@ -24,8 +24,8 @@ PlayingSound::PlayingSound(ALuint source_id, std::shared_ptr<ISoundDataOpen> dat
 	m_is_positional(pos_vel_opt.has_value())
 {
 	// Calculate actual start_time (see lua_api.txt for specs)
-	f32 len_seconds = m_data->m_decode_info.length_seconds;
-	f32 len_samples = m_data->m_decode_info.length_samples;
+	f32 len_seconds = m_data->getLengthSeconds();
+	f32 len_samples = m_data->getLengthSamples();
 	if (!m_looping) {
 		if (start_time < 0.0f) {
 			start_time = std::fmax(start_time + len_seconds, 0.0f);
@@ -97,8 +97,7 @@ PlayingSound::PlayingSound(ALuint source_id, std::shared_ptr<ISoundDataOpen> dat
 
 #ifdef AL_SOFT_direct_channels_remix
 		// Play directly on stereo output channels if possible. Improves sound quality.
-		if (exts.have_ext_AL_SOFT_direct_channels_remix
-				&& m_data->m_decode_info.is_stereo) {
+		if (exts.have_ext_AL_SOFT_direct_channels_remix && m_data->isStereo()) {
 			alSourcei(m_source_id, AL_DIRECT_CHANNELS_SOFT, AL_REMIX_UNMATCHED_SOFT);
 			warn_if_al_error("PlayingSound::PlayingSound at setting AL_DIRECT_CHANNELS_SOFT");
 		}
@@ -146,7 +145,7 @@ bool PlayingSound::stepStream(bool playback_speed_changed)
 
 	// Fill up
 	for (int i = 0; i < num_bufs_to_enqueue; ++i) {
-		if (m_next_sample_pos == m_data->m_decode_info.length_samples) {
+		if (m_next_sample_pos == m_data->getLengthSamples()) {
 			// Reached end
 			if (m_looping) {
 				m_next_sample_pos = 0;
@@ -166,7 +165,7 @@ bool PlayingSound::stepStream(bool playback_speed_changed)
 		if (getState() == AL_STOPPED) {
 			play();
 			warningstream << "PlayingSound::stepStream: Sound queue ran empty for \""
-					<< m_data->m_decode_info.name_for_logging << "\"" << std::endl;
+					<< m_data->getNameForLogging() << "\"" << std::endl;
 		}
 	}
 
