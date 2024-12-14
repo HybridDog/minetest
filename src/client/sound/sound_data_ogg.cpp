@@ -7,6 +7,7 @@
 // Copyright (C) 2011 Giuseppe Bilotta <giuseppe.bilotta@gmail.com>
 
 #include "sound_data.h"
+#include "sound_data_mod.h"
 #include "sound_data_ogg.h"
 
 #include "sound_constants.h"

@@ -7,6 +7,7 @@
 // Copyright (C) 2011 Giuseppe Bilotta <giuseppe.bilotta@gmail.com>
 
 #include "sound_data.h"
+#include "sound_data_mod.h"
 #include "sound_data_ogg.h"
 
 #include "sound_constants.h"
@@ -20,7 +21,22 @@ namespace sound {
 
 std::shared_ptr<ISoundDataOpen> SoundDataUnopenBuffer::open(const std::string &sound_name) &&
 {
-	return ISoundDataOpenOgg::fromBuffer(sound_name, std::move(m_buffer));
+warningstream << sound_name << " is played\n";
+    if (sound_name.length() >= 4 && !sound_name.compare(sound_name.length() - 4,
+			4, ".ogg")) {
+		// It ends with .ogg, so we assume that it is Ogg audio.
+		return ISoundDataOpenOgg::fromBuffer(sound_name, std::move(m_buffer));
+	}
+	// Other ending -> try openmpt
+	try {
+		// TODO: why does this fail?
+		// /lua minetest.sound_play("secretly")
+		// secretly.it in a sounds folder of a loaded mod
+		return std::make_shared<ISoundDataOpenMod>(*m_buffer.cbegin(), *m_buffer.cend());
+	} catch (const openmpt::exception &e) {
+		std::cerr << "Cannot load \"" << sound_name << "\": " << e.what() << "\n";
+	}
+	return nullptr;
 }
 
 /*
@@ -29,7 +45,22 @@ std::shared_ptr<ISoundDataOpen> SoundDataUnopenBuffer::open(const std::string &s
 
 std::shared_ptr<ISoundDataOpen> SoundDataUnopenFile::open(const std::string &sound_name) &&
 {
-	return ISoundDataOpenOgg::fromFile(sound_name, m_path);
+	// load from file at m_path
+
+    if (sound_name.length() >= 4 && !sound_name.compare(sound_name.length() - 4,
+			4, ".ogg")) {
+		// It ends with .ogg, so we assume that it is Ogg audio.
+		return ISoundDataOpenOgg::fromFile(sound_name, m_path);
+	}
+
+	// Other ending -> try openmpt
+	try {
+		return std::make_shared<ISoundDataOpenMod>(m_path);
+	} catch (const openmpt::exception &e) {
+		std::cerr << "Cannot load \"" << sound_name << "\": " << e.what() << "\n";
+	}
+	return nullptr;
+
 }
 
 } // namespace sound
