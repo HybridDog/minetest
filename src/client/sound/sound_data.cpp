@@ -27,14 +27,20 @@ warningstream << sound_name << " is played\n";
 		// It ends with .ogg, so we assume that it is Ogg audio.
 		return ISoundDataOpenOgg::fromBuffer(sound_name, std::move(m_buffer));
 	}
+	errorstream << "Loading " << sound_name << " tracker\n";
 	// Other ending -> try openmpt
 	try {
 		// TODO: why does this fail?
 		// /lua minetest.sound_play("secretly")
 		// secretly.it in a sounds folder of a loaded mod
-		return std::make_shared<ISoundDataOpenMod>(*m_buffer.cbegin(), *m_buffer.cend());
+		//~ return std::make_shared<ISoundDataOpenMod>(*m_buffer.cbegin(), *m_buffer.cend());
+		std::vector<uint8_t> buffer_as_vec(m_buffer.begin(), m_buffer.end());
+		errorstream << "buffersize " << buffer_as_vec.size() << " tracker\n";
+
+		return std::make_shared<ISoundDataOpenMod>(buffer_as_vec);
+		//~ return std::make_shared<ISoundDataOpenMod>("/tmp/meins/secretly.it");
 	} catch (const openmpt::exception &e) {
-		std::cerr << "Cannot load \"" << sound_name << "\": " << e.what() << "\n";
+		errorstream << "Cannot load \"" << sound_name << "\": " << e.what() << "\n";
 	}
 	return nullptr;
 }

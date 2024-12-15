@@ -15,7 +15,8 @@ namespace sound {
 struct ISoundDataOpenMod final : ISoundDataOpen
 {
 	explicit ISoundDataOpenMod(const std::string &path);
-	explicit ISoundDataOpenMod(const u8 &buf_begin, const u8 &buf_end);
+	//~ explicit ISoundDataOpenMod(const u8 &buf_begin, const u8 &buf_end);
+	explicit ISoundDataOpenMod(const std::vector<uint8_t> &buf);
 
 	virtual bool isStereo() const noexcept override {
 		return true; }
@@ -33,7 +34,8 @@ struct ISoundDataOpenMod final : ISoundDataOpen
 
 private:
 	openmpt::module m_mod;
-	RAIIALSoundBuffer m_snd_buffer_id;
+	RAIIALSoundBuffer m_snd_buffer_id{RAIIALSoundBuffer::generate()};
+	ALuint m_mod_bytepos = 0;
 };
 
 } // namespace sound
