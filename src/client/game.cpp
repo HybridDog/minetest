@@ -1535,13 +1535,14 @@ void Game::processItemSelection(u16 *new_playeritem)
 
 	/* Item selection using mouse wheel
 	 */
-	s32 wheel = input->getMouseWheel();
+	static f32 wheel_acc = 0.0f;
+	wheel_acc += input->getMouseWheel();
 	if (!m_enable_hotbar_mouse_wheel)
-		wheel = 0;
+		wheel_acc = 0.0f;
+	s32 dir = wheel_acc + 0.5f;
+	wheel_acc -= dir;
 	if (m_invert_hotbar_mouse_wheel)
-		wheel *= -1;
-
-	s32 dir = wheel;
+		dir = -dir;
 
 	if (wasKeyDown(KeyType::HOTBAR_NEXT))
 		dir = -1;

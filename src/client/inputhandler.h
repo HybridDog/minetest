@@ -48,10 +48,10 @@ public:
 
 	void reloadKeybindings();
 
-	s32 getMouseWheel()
+	f32 getMouseWheel()
 	{
-		s32 a = mouse_wheel;
-		mouse_wheel = 0;
+		f32 a = mouse_wheel;
+		mouse_wheel = 0.0f;
 		return a;
 	}
 
@@ -63,7 +63,7 @@ public:
 		keyWasPressed.reset();
 		keyWasReleased.reset();
 
-		mouse_wheel = 0;
+		mouse_wheel = 0.0f;
 	}
 
 	void releaseAllKeys()
@@ -105,7 +105,7 @@ private:
 	 */
 	std::array<std::vector<KeyPress>, KeyType::INTERNAL_ENUM_COUNT> keybindings;
 
-	s32 mouse_wheel = 0;
+	f32 mouse_wheel = 0.0f;
 
 	// The current state of physical keys.
 	std::set<KeyPress> physicalKeyDown;
@@ -168,7 +168,7 @@ public:
 	virtual v2s32 getMousePos() = 0;
 	virtual void setMousePos(s32 x, s32 y) = 0;
 
-	virtual s32 getMouseWheel() = 0;
+	virtual f32 getMouseWheel() = 0;
 
 	virtual void step(float dtime) {}
 
@@ -244,7 +244,7 @@ public:
 	virtual v2s32 getMousePos();
 	virtual void setMousePos(s32 x, s32 y);
 
-	virtual s32 getMouseWheel()
+	virtual f32 getMouseWheel()
 	{
 		return m_receiver->getMouseWheel();
 	}
@@ -286,7 +286,7 @@ public:
 	virtual v2s32 getMousePos() { return mousepos; }
 	virtual void setMousePos(s32 x, s32 y) { mousepos = v2s32(x, y); }
 
-	virtual s32 getMouseWheel() { return 0; }
+	virtual f32 getMouseWheel() { return 0.0f; }
 
 	virtual void step(float dtime);
 
