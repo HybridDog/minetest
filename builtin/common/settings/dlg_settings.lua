@@ -15,6 +15,7 @@ local all_pages = {}
 local page_by_id = {}
 local filtered_pages = all_pages
 local filtered_page_by_id = page_by_id
+local current_show_only_modified = false
 
 
 local function get_setting_info(name)
@@ -282,7 +283,7 @@ local function get_setting_match_weight(entry, query_keywords)
 end
 
 
-local function filter_page_content(page, query_keywords)
+local function filter_page_content(page, query_keywords, show_only_modified)
 	if #query_keywords == 0 then
 		return page.content, 0
 	end
@@ -292,14 +293,18 @@ local function filter_page_content(page, query_keywords)
 	local max_weight = 0
 	for _, content in ipairs(page.content) do
 		if type(content) == "string" then
-			local setting = get_setting_info(content)
-			assert(setting, "Unknown setting: " .. content)
+			-- TODO
+			if not show_only_modified or core.settings:has(content) then
+				local setting = get_setting_info(content)
+				assert(setting, "Unknown setting: " .. content)
+				--~ print(dump(setting))
 
-			local weight = get_setting_match_weight(setting, query_keywords)
-			if weight > 0 then
-				max_weight = math.max(max_weight, weight)
-				retval[i] = content
-				i = i + 1
+				local weight = get_setting_match_weight(setting, query_keywords)
+				if weight > 0 then
+					max_weight = math.max(max_weight, weight)
+					retval[i] = content
+					i = i + 1
+				end
 			end
 		elseif type(content) == "table" and content.query_text then
 			for _, keyword in ipairs(query_keywords) do
@@ -316,7 +321,7 @@ local function filter_page_content(page, query_keywords)
 end
 
 
-local function update_filtered_pages(query)
+local function update_filtered_pages(query, show_only_modified)
 	filtered_pages = {}
 	filtered_page_by_id = {}
 
@@ -329,7 +334,18 @@ local function update_filtered_pages(query)
 	local best_page_weight = -1
 
 	for _, page in ipairs(all_pages) do
-		local content, page_weight = filter_page_content(page, query_keywords)
+		if show_only_modified then
+			local new_content = {}
+			for _, content in ipairs(page.content) do
+				if type(content) ~= "string" or core.settings:has(content) then
+					new_content[#new_content+1] = content
+				end
+			end
+			page = table.copy(page)
+			page.content = new_content
+		end
+		local content, page_weight = filter_page_content(page, query_keywords,
+			show_only_modified)
 		if page_has_contents(page, content) then
 			local new_page = table.copy(page)
 			new_page.content = content
@@ -513,6 +529,8 @@ local function get_formspec(dialogdata)
 	local checkbox_w = (tabsize.width - back_w - 2*0.2) / 2
 	local show_technical_names = core.settings:get_bool("show_technical_names")
 	local show_advanced = core.settings:get_bool("show_advanced")
+	--~ local show_only_modified = core.settings:get_bool("show_only_modified")
+	local show_only_modified = current_show_only_modified
 
 	formspec_show_hack = not formspec_show_hack
 
@@ -544,6 +562,12 @@ local function get_formspec(dialogdata)
 		("checkbox[%f,%f;show_advanced;%s;%s]"):format(
 			back_w + 3*0.2 + checkbox_w, tabsize.height + 0.6,
 			fgettext("Show advanced settings"), tostring(show_advanced)),
+
+		("checkbox[%f,%f;show_only_modified;%s;%s]"):format(
+			back_w + 2*0.2, tabsize.height + 0.6 - 0.5,
+			fgettext("Show only modified settings"),
+			tostring(show_only_modified)),
+		--TODO
 
 		"field[0.25,0.25;", tostring(search_width), ",0.75;search_query;;",
 			core.formspec_escape(dialogdata.query or ""), "]",
@@ -703,7 +727,8 @@ function write_settings_early()
 end
 
 local function regenerate_page_list(dialogdata)
-	local suggested_page_id = update_filtered_pages(dialogdata.query)
+	local suggested_page_id = update_filtered_pages(dialogdata.query,
+		dialogdata.show_only_modified)
 
 	dialogdata.components = nil
 
@@ -720,6 +745,8 @@ local function buttonhandler(this, fields)
 	dialogdata.leftscroll = core.explode_scrollbar_event(fields.leftscroll).value or dialogdata.leftscroll
 	dialogdata.rightscroll = core.explode_scrollbar_event(fields.rightscroll).value or dialogdata.rightscroll
 	dialogdata.query = fields.search_query
+	--~ dialogdata.show_only_modified = core.settings:get_bool("show_only_modified")
+	dialogdata.show_only_modified = current_show_only_modified
 
 	-- "fields.quit" is for the pause menu env
 	if fields.back or fields.quit then
@@ -744,12 +771,29 @@ local function buttonhandler(this, fields)
 		return true
 	end
 
+	if fields.show_only_modified ~= nil then
+		dialogdata.components = nil
+		dialogdata.leftscroll = 0
+		dialogdata.rightscroll = 0
+
+		local value = core.is_yes(fields.show_only_modified)
+		current_show_only_modified = value
+		--~ core.settings:set_bool("show_only_modified", value)
+		--~ write_settings_early()
+		dialogdata.page_id = update_filtered_pages(dialogdata.query,
+			current_show_only_modified)
+		--~ regenerate_page_list(dialogdata)
+
+		return true
+	end
+
 	if fields.search or fields.key_enter_field == "search_query" then
 		dialogdata.components = nil
 		dialogdata.leftscroll = 0
 		dialogdata.rightscroll = 0
 
-		dialogdata.page_id = update_filtered_pages(dialogdata.query)
+		dialogdata.page_id = update_filtered_pages(dialogdata.query,
+			current_show_only_modified)
 
 		return true
 	end
@@ -759,7 +803,8 @@ local function buttonhandler(this, fields)
 		dialogdata.leftscroll = 0
 		dialogdata.rightscroll = 0
 
-		dialogdata.page_id = update_filtered_pages("")
+		dialogdata.page_id = update_filtered_pages("",
+			current_show_only_modified)
 		return true
 	end
 
@@ -821,7 +866,8 @@ if INIT == "mainmenu" then
 		load()
 		local dlg = dialog_create("dlg_settings", get_formspec, buttonhandler, eventhandler)
 
-		dlg.data.page_id = page_id or update_filtered_pages("")
+		dlg.data.page_id = page_id or update_filtered_pages("",
+			current_show_only_modified)
 
 		return dlg
 	end
@@ -846,7 +892,8 @@ else
 		load()
 		dialog = {}
 		dialog.data = {}
-		dialog.data.page_id = update_filtered_pages("")
+		dialog.data.page_id = update_filtered_pages("",
+			current_show_only_modified)
 		dialog.delete = function()
 			dialog = nil
 			-- only needed for the "fields.back" case, in the "fields.quit"
